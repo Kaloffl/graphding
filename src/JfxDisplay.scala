@@ -13,7 +13,7 @@ import ui.KeyEvent.Key
 class JfxDisplay(
                   override val width: Int,
                   override val height: Int,
-				  val title : String = "Window"
+                  val title : String = "Window"
                 ) extends RenderTarget {
 
   var int_buffer: Array[Int] = new Array[Int](width * height)
@@ -49,8 +49,6 @@ class JfxDisplay(
   ActualDisplay.width = width
   ActualDisplay.height = height
   ActualDisplay.title = title
-  
-  
 
   new Thread(() => {
     Application.launch(classOf[ActualDisplay])
@@ -201,7 +199,7 @@ class ActualDisplay extends Application {
     stage.setScene(scene)
     stage.setResizable(false)
     stage.setOnCloseRequest(_ => System.exit(0))
-	stage.setTitle(ActualDisplay.title)
+    stage.setTitle(ActualDisplay.title)
     stage.show()
     ActualDisplay.instance = this
   }
