@@ -3,8 +3,6 @@ package ui
 import java.io.File
 import javax.imageio.ImageIO
 
-import ui.RenderTarget
-
 class FontRenderer(font_file: String, val alphabet: String, val char_width: Int, val char_height: Int) {
 
   val image = ImageIO.read(new File(font_file))

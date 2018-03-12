@@ -43,5 +43,21 @@ trait RenderTarget {
     }
   }
 
+  def draw_line(x1: Int, y1: Int, x2: Int, y2: Int, color: Color): Unit = {
+    val dx = x1 - x2
+    val dy = y1 - y2
+    if (abs(dx) < abs(dy)) {
+      val sign = if (dy < 0) -1 else 1
+      for (y <- 0 to dy by sign) {
+        set_pixel(x2 + dx * y / dy, y2 + y, color)
+      }
+    } else {
+      val sign = if (dx < 0) -1 else 1
+      for (x <- 0 to dx by sign) {
+        set_pixel(x2 + x, y2 + dy * x / dx, color)
+      }
+    }
+  }
+
   def commit(): Unit
 }
