@@ -28,7 +28,7 @@ object Main {
         Edge(from = nodes(4), to = nodes(3)),
         Edge(from = nodes(5), to = nodes(5)))
 
-    val window = new JfxDisplay(800, 600)
+    val window = new JfxDisplay(800, 600,"Zoop!")
 
     while (true) {
       val start_time = System.nanoTime()

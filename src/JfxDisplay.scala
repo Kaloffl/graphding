@@ -12,7 +12,8 @@ import ui.KeyEvent.Key
 
 class JfxDisplay(
                   override val width: Int,
-                  override val height: Int
+                  override val height: Int,
+				  val title : String = "Window"
                 ) extends RenderTarget {
 
   var int_buffer: Array[Int] = new Array[Int](width * height)
@@ -47,6 +48,9 @@ class JfxDisplay(
 
   ActualDisplay.width = width
   ActualDisplay.height = height
+  ActualDisplay.title = title
+  
+  
 
   new Thread(() => {
     Application.launch(classOf[ActualDisplay])
@@ -54,11 +58,13 @@ class JfxDisplay(
   while (null == ActualDisplay.instance) {
     Thread.sleep(100)
   }
+  
 }
 
 object ActualDisplay {
   var width = 0
   var height = 0
+  var title = ""
   var instance: ActualDisplay = _
 
   val jfxKeyMap: util.Map[KeyCode, Key] = {
@@ -133,6 +139,8 @@ class ActualDisplay extends Application {
   var image = new WritableImage(ActualDisplay.width, ActualDisplay.height)
   val view = new ImageView(image)
   val events = new util.LinkedList[InputEvent]
+  
+ 
 
   override def start(stage: Stage): Unit = {
     val content = new BorderPane
@@ -193,6 +201,7 @@ class ActualDisplay extends Application {
     stage.setScene(scene)
     stage.setResizable(false)
     stage.setOnCloseRequest(_ => System.exit(0))
+	stage.setTitle(ActualDisplay.title)
     stage.show()
     ActualDisplay.instance = this
   }
