@@ -85,6 +85,7 @@ case class Color(r: Float, g: Float, b: Float) {
   def sb: Int = Color.float_to_byte(b)
 
   def +(c: Color) = Color(r + c.r, g + c.g, b + c.b)
+  def -(c: Color) = Color(r - c.r, g - c.g, b - c.b)
   def *(c: Color) = Color(r * c.r, g * c.g, b * c.b)
   def *(f: Float) = Color(r * f, g * f, b * f)
 }
