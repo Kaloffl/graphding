@@ -10,20 +10,24 @@ import java.lang.Math._
 object Main {
 
   // Drawing settings
-  val multisampling      =   4
-  val nodes_columns      =   3
-  val nodes_margin       = 100 * multisampling
-  val nodes_size         =  50 * multisampling
-  val nodes_border_width =   2 * multisampling
-  val line_width         =   1 * multisampling
-  val arrow_tip_length   =  10 * multisampling
-  val graph_x            =  50 * multisampling
-  val graph_y            =  50 * multisampling
-  val tree_x             = 450 * multisampling
-  val tree_y             =  50 * multisampling
+  val multisampling       =   4
+  val nodes_columns       =   3
+  val nodes_margin        =  70 * multisampling
+  val nodes_size          =  50 * multisampling
+  val nodes_border_width  =   2 * multisampling
+  val line_width          =   2 * multisampling
+  val arrow_tip_length    =  10 * multisampling
+  val nodes_layout_radius = 150 * multisampling
+  val graph_x             = 200 * multisampling
+  val graph_y             = 200 * multisampling
+  val tree_x              = 450 * multisampling
+  val tree_y              =  50 * multisampling
 
-  // Datatypes to represent the graph and tree
+  // Datatype to represent the graph and tree
   case class Node(id: Int)
+
+  // Datatypes for the UI
+  case class Button(x1: Int, y1: Int, x2: Int, y2: Int, text: String, enabled: () => Boolean)
 
   def main(args: Array[String]): Unit = {
 
@@ -35,22 +39,31 @@ object Main {
         Node(id = 2),
         Node(id = 3),
         Node(id = 4),
-        Node(id = 5))
+        Node(id = 5),
+        Node(id = 6),
+        Node(id = 7),
+        Node(id = 8))
 
     // Set of directed edges between the nodes
     val edges =
       Seq[(Node, Seq[Node])](
         (nodes(0), Seq(nodes(1), nodes(3))),
         (nodes(1), Seq(nodes(3), nodes(4))),
-        (nodes(2), Seq(nodes(4), nodes(5))),
-        (nodes(3), Seq()),
-        (nodes(4), Seq(nodes(3))),
-        (nodes(5), Seq(nodes(5))))
+        (nodes(2), Seq(nodes(5))),
+        (nodes(3), Seq(nodes(6), nodes(7))),
+        (nodes(4), Seq(nodes(3), nodes(7))),
+        (nodes(5), Seq(nodes(5), nodes(8))),
+        (nodes(6), Seq()),
+        (nodes(7), Seq(nodes(5), nodes(7))),
+        (nodes(8), Seq()))
 
     var root: Node = null
 
     // Colors of the nodes
     var node_colors: Map[Node, Color] = null
+
+    // Map just for displaying and interpolating the colors
+    var visual_node_colors: Map[Node, Color] = nodes.map(n => n -> Color.White).toMap
 
     // Stack of nodes to check
     var nodes_todo: Seq[Node] = null
@@ -60,38 +73,75 @@ object Main {
 
     // Useful functions
     def reset(): Unit = {
-      root = nodes(0)
+      if (null == root) root = nodes(0)
       node_colors = nodes.map(n => n -> Color.White).toMap
-      nodes_todo = Seq(nodes(0))
+      nodes_todo = Seq(root)
       node_parents = Map[Node, Node]()
     }
 
     def select_node(node: Node): Unit = {
-      reset()
       root = node
-      nodes_todo = Seq(node)
+      reset()
     }
-
+/*
     def get_node_graph_pos(node: Node): (Int, Int) = {
       return (
         (node.id % nodes_columns) * nodes_margin + graph_x,
         (node.id / nodes_columns) * nodes_margin + graph_y)
     }
+*/
+    def get_node_graph_pos(node: Node): (Int, Int) = {
+      val index = nodes.indexOf(node)
+      val angle = toRadians(360.0 / nodes.length * index)
+      return (
+        graph_x + (cos(angle) * nodes_layout_radius).toInt,
+        graph_y + (sin(angle) * nodes_layout_radius).toInt)
+    }
+
+    def get_node_tree_depth(node: Node): Int = {
+      var depth = -1
+      var current_node = node
+      while (null != current_node) {
+        current_node = node_parents.getOrElse(current_node, null)
+        depth += 1
+      }
+      if (0 == depth && node != root)
+        return -1
+      return depth
+    }
 
     def get_node_tree_pos(node: Node): (Int, Int) = {
+      val depth = get_node_tree_depth(node)
+      val siblings = nodes.filter(get_node_tree_depth(_) == depth).sortBy(_.id)
+      val index = siblings.indexOf(node)
+
       return (
-        (node.id % nodes_columns) * nodes_margin + tree_x,
-        (node.id / nodes_columns) * nodes_margin + tree_y)
+        index * nodes_margin + tree_x,
+        depth * nodes_margin + tree_y)
     }
 
     // Drawing stuff
     val real_window = new JfxDisplay(800, 600,"👉😎👉 Zoop!")
     val window = new DownScaleFilter(real_window, multisampling, multisampling)
-/* TODO: make a readable font and put it in the project
     val font = new FontRenderer(
-      "C:/dev/font2.png",
+      "font.png",
       "ABCDEFGHIJKLMNOPQRSTUVWXYZ abcdefghijklmnopqrstuvwxyz0123456789.,!?'\"-+=/\\%()<>:;_[]{}^µ", 8, 8)
-*/
+
+    val step_button = Button(
+      x1 = (window.width  * 0.7).toInt,
+      y1 = (window.height * 0.9 ).toInt,
+      x2 = (window.width  * 0.8).toInt,
+      y2 = (window.height * 0.95).toInt,
+      text = "Next step",
+      enabled = { () => null != nodes_todo && nodes_todo.nonEmpty })
+
+    val reset_button = Button(
+      x1 = (window.width  * 0.85).toInt,
+      y1 = (window.height * 0.9 ).toInt,
+      x2 = (window.width  * 0.95).toInt,
+      y2 = (window.height * 0.95).toInt,
+      text = "Reset",
+      enabled = { () => true })
 
     reset()
     var mouse_x = 0
@@ -114,6 +164,14 @@ object Main {
               if (dist_x * dist_x + dist_y * dist_y < nodes_size * nodes_size) {
                 select_node(node)
               }
+            }
+            if (step_button.x1 <= mouse_x && mouse_x <= step_button.x2 &&
+                step_button.y1 <= mouse_y && mouse_y <= step_button.y2) {
+              step = true
+            }
+            if (reset_button.x1 <= mouse_x && mouse_x <= reset_button.x2 &&
+                reset_button.y1 <= mouse_y && mouse_y <= reset_button.y2) {
+              reset()
             }
           case MouseEvent(x, y, _) =>
             mouse_x = x * multisampling
@@ -170,10 +228,10 @@ object Main {
         val to_x = (x2 - normal_x * nodes_size / 2).toInt
         val to_y = (y2 - normal_y * nodes_size / 2).toInt
 
-        val arm_x1 = (to_x - normal_x * arrow_tip_length - normal_y * arrow_tip_length).toInt
-        val arm_y1 = (to_y - normal_y * arrow_tip_length + normal_x * arrow_tip_length).toInt
-        val arm_x2 = (to_x - normal_x * arrow_tip_length + normal_y * arrow_tip_length).toInt
-        val arm_y2 = (to_y - normal_y * arrow_tip_length - normal_x * arrow_tip_length).toInt
+        val arm_x1 = (to_x - normal_x * arrow_tip_length - normal_y * arrow_tip_length / 2).toInt
+        val arm_y1 = (to_y - normal_y * arrow_tip_length + normal_x * arrow_tip_length / 2).toInt
+        val arm_x2 = (to_x - normal_x * arrow_tip_length + normal_y * arrow_tip_length / 2).toInt
+        val arm_y2 = (to_y - normal_y * arrow_tip_length - normal_x * arrow_tip_length / 2).toInt
 
         window.draw_line(from_x, from_y, to_x, to_y, line_width, color)
         window.draw_line(arm_x1, arm_y1, to_x, to_y, line_width, color)
@@ -183,31 +241,68 @@ object Main {
       def draw_node(node: Node, x: Int, y: Int, border_color: Color, fill_color: Color): Unit = {
         window.fill_circle(x, y, nodes_size / 2, border_color)
         window.fill_circle(x, y, nodes_size / 2 - nodes_border_width, fill_color)
+        val text = String.valueOf(node.id)
+        val text_x = x / multisampling - (font.char_width * text.length) / 2
+        val text_y = y / multisampling - font.char_height / 2
+        font.draw(real_window, text_x, text_y, text, border_color)
+      }
+
+      def draw_button(button: Button): Unit = {
+        window.fill_rect(
+          x1 = button.x1,
+          y1 = button.y1,
+          x2 = button.x2,
+          y2 = button.y2,
+          color = Color.White)
+
+        window.draw_rect(
+          x1 = button.x1,
+          y1 = button.y1,
+          x2 = button.x2,
+          y2 = button.y2,
+          line_width = 2 * multisampling,
+          color = if (button.enabled()) Color.Dark_Gray else Color.Gray)
+
+        font.draw(
+          real_window,
+          x = ((button.x1 + button.x2) / multisampling - font.char_width * button.text.length) / 2,
+          y = ((button.y1 + button.y2) / multisampling - font.char_height) / 2,
+          string = button.text,
+          color = if (button.enabled()) Color.Dark_Gray else Color.Gray)
       }
 
       for ((source, targets) <- edges; target <- targets) {
         if (source == target) {
           val (x1, y1) = get_node_graph_pos(source)
-          val x2 = x1 + nodes_margin / 2
-          val y2 = y1 - nodes_size / 2
-          val x3 = x2
-          val y3 = y1 + nodes_size / 2
-          val x4 = x1
-          val y4 = y1
+          val nx = (x1 - graph_x).toFloat / nodes_layout_radius
+          val ny = (y1 - graph_y).toFloat / nodes_layout_radius
+
+          val x2 = (x1 + nx * nodes_margin / 2 - ny * nodes_margin / 8).toInt
+          val y2 = (y1 + ny * nodes_margin / 2 + nx * nodes_margin / 8).toInt
+          val x3 = (x1 + nx * nodes_margin / 2 + ny * nodes_margin / 8).toInt
+          val y3 = (y1 + ny * nodes_margin / 2 - nx * nodes_margin / 8).toInt
           window.draw_line(x1, y1, x2, y2, line_width, Color.Black)
           window.draw_line(x2, y2, x3, y3, line_width, Color.Black)
-          draw_arrow(x3, y3, x4, y4, Color.Black)
+          draw_arrow(x3, y3, x1, y1, Color.Black)
         } else {
           val (x1, y1) = get_node_graph_pos(source)
           val (x2, y2) = get_node_graph_pos(target)
-          draw_arrow(x1, y1, x2, y2, Color.Black)
+          val color = if (nodes_todo.contains(target) && node_parents.getOrElse(target, null) == source) Color.Red else Color.Black
+          draw_arrow(x1, y1, x2, y2, color)
         }
+      }
+
+      if (null != root) {
+        val (center_x, center_y) = get_node_graph_pos(root)
+        window.fill_circle(center_x, center_y, nodes_size * 5 / 8, Color.Red)
       }
 
       for (node <- nodes) {
         val (center_x, center_y) = get_node_graph_pos(node)
         val border_color = if (nodes_todo.contains(node)) Color.Red else Color.Black
-        draw_node(node, center_x, center_y, border_color, node_colors(node))
+        val fill_color = (visual_node_colors(node) + node_colors(node)) * 0.5f
+        visual_node_colors += (node -> fill_color)
+        draw_node(node, center_x, center_y, border_color, fill_color)
       }
 
       for ((target, source) <- node_parents) {
@@ -223,13 +318,15 @@ object Main {
         }
       }
 
+      draw_button(step_button)
+      draw_button(reset_button)
 
 /*
       val test_angle = toRadians(System.currentTimeMillis() / 1000.0 * 100)
       val test_x1 = window.width / 2
       val test_y1 = window.height / 2
-      val test_x2 = test_x1 + (cos(test_angle) * 100).toInt
-      val test_y2 = test_y1 + (sin(test_angle) * 100).toInt
+      val test_x2 = test_x1 + (cos(test_angle) * 100 * multisampling).toInt
+      val test_y2 = test_y1 + (sin(test_angle) * 100 * multisampling).toInt
       draw_arrow(test_x1, test_y1, test_x2, test_y2, Color.Black)
 */
 

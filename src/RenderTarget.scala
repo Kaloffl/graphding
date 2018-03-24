@@ -26,20 +26,20 @@ trait RenderTarget {
     }
   }
 
-  def draw_rect(x1: Int, y1: Int, x2: Int, y2: Int, color: Color): Unit = {
+  def draw_rect(x1: Int, y1: Int, x2: Int, y2: Int, line_width: Int = 1, color: Color): Unit = {
     val min_x = max(         0, min(x1, x2))
     val min_y = max(         0, min(y1, y2))
     val max_x = min( width - 1, max(x1, x2))
     val max_y = min(height - 1, max(y1, y2))
 
-    for (x <- min_x to max_x) {
-      set_pixel(x, min_y, color)
-      set_pixel(x, max_y, color)
+    for (y <- 0 until line_width; x <- min_x to max_x) {
+      set_pixel(x, min_y + y, color)
+      set_pixel(x, max_y - y, color)
     }
 
-    for (y <- min_y to max_y) {
-      set_pixel(min_x, y, color)
-      set_pixel(max_x, y, color)
+    for (y <- min_y to max_y; x <- 0 until line_width) {
+      set_pixel(min_x + x, y, color)
+      set_pixel(max_x - x, y, color)
     }
   }
 
@@ -69,8 +69,10 @@ trait RenderTarget {
 
   def draw_line(x1: Int, y1: Int, x2: Int, y2: Int, width: Int, color: Color): Unit = {
     if (x1 == x2 && y1 == y2) return
-    val dx = x1 - x2
-    val dy = y1 - y2
+    val diff_x = x1 - x2
+    val diff_y = y1 - y2
+    val normalization = 1.0f / (diff_x * diff_x + diff_y * diff_y)
+    val max_dist_sq = width * width / 4f
     val min_x = min(x1, x2) - width
     val max_x = max(x1, x2) + width
     val min_y = min(y1, y2) - width
@@ -78,54 +80,14 @@ trait RenderTarget {
     for (py <- min_y to max_y; px <- min_x to max_x) {
       val x = x1 - px
       val y = y1 - py
-      val a = max(0, min(1, (x * dx + y * dy) / (dx * dx + dy * dy).toFloat))
-      val b = x - dx * a
-      val c = y - dy * a
-      if (b * b + c * c <= width * width / 4f) {
+      val a = max(0, min(1, (x * diff_x + y * diff_y) * normalization))
+      val dist_x = x - diff_x * a
+      val dist_y = y - diff_y * a
+      if (dist_x * dist_x + dist_y * dist_y <= max_dist_sq) {
         set_pixel(px, py, color)
       }
     }
   }
-/*
-  def line(x: Double, y: Double, x1: Double, y1: Double, x2: Double, y2: Double, width: Double): Float = {
-    val dx = x1 - x2
-    val dy = y1 - y2
-    val xx = x1 - x
-    val yy = y1 - y
-    val a = max(0, min(1, (xx * dx + yy * dy) / (dx * dx + dy * dy)))
-    val b = xx - dx * a
-    val c = yy - dy * a
-    return (sqrt(b * b + c * c) - width / 2).toFloat
-  }
-*/
-
-/*
-  def draw_line(x1: Int, y1: Int, x2: Int, y2: Int, color: Color): Unit = {
-    val dx = x1 - x2
-    val dy = y1 - y2
-    if (0 == dx) {
-      val sign = if (dy < 0) -1 else 1
-      for (y <- 0 to dy by sign) {
-       set_pixel(x1, y2 + y, color)
-      }
-    } else if (0 == dy) {
-      val sign = if (dx < 0) -1 else 1
-      for (x <- 0 to dx by sign) {
-        set_pixel(x2 + x, y1, color)
-      }
-    } else if (abs(dx) < abs(dy)) {
-      val sign = if (dy < 0) -1 else 1
-      for (y <- 0 to dy by sign) {
-        set_pixel(x2 + dx * y / dy, y2 + y, color)
-      }
-    } else {
-      val sign = if (dx < 0) -1 else 1
-      for (x <- 0 to dx by sign) {
-        set_pixel(x2 + x, y2 + dy * x / dx, color)
-      }
-    }
-  }
-*/
 
   def commit(): Unit
 }
