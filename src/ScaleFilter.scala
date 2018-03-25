@@ -60,3 +60,67 @@ class DownScaleFilter(
 
   override def commit(): Unit = target.commit()
 }
+
+class MultisamplingFilter(
+    val target: RenderTarget,
+    val multisampling: Int) extends RenderTarget {
+
+  val scaler = new DownScaleFilter(target, multisampling, multisampling)
+
+  override def width: Int = target.width
+  override def height: Int = target.height
+
+  override def set_pixel(x: Int, y: Int, color: Color): Unit =
+    scaler.fill_rect(
+      x * multisampling,
+      y * multisampling,
+      (x + 1) * multisampling - 1,
+      (y + 1) * multisampling - 1,
+      color)
+
+  override def fill(color: Color): Unit = scaler.fill(color)
+
+  override def fill_rect(x1: Int, y1: Int, x2: Int, y2: Int, color: Color): Unit =
+    scaler.fill_rect(
+      x1 * multisampling,
+      y1 * multisampling,
+      x2 * multisampling,
+      y2 * multisampling,
+      color)
+
+  override def draw_rect(x1: Int, y1: Int, x2: Int, y2: Int, line_width: Int = 1, color: Color): Unit =
+    scaler.draw_rect(
+      x1 * multisampling,
+      y1 * multisampling,
+      x2 * multisampling,
+      y2 * multisampling,
+      line_width * multisampling,
+      color)
+
+  override def fill_circle(center_x: Int, center_y: Int, radius: Int, color: Color): Unit =
+    scaler.fill_circle(
+      center_x * multisampling,
+      center_y * multisampling,
+      radius * multisampling,
+      color)
+
+  override def draw_circle(center_x: Int, center_y: Int, radius: Int, line_width: Int = 1, color: Color): Unit =
+    scaler.draw_circle(
+      center_x * multisampling,
+      center_y * multisampling,
+      radius * multisampling,
+      line_width * multisampling,
+      color)
+
+  override def draw_line(x1: Int, y1: Int, x2: Int, y2: Int, width: Int, color: Color): Unit =
+    scaler.draw_line(
+      x1 * multisampling,
+      y1 * multisampling,
+      x2 * multisampling,
+      y2 * multisampling,
+      width * multisampling,
+      color)
+
+  override def commit(): Unit = scaler.commit()
+
+}
