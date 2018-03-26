@@ -68,7 +68,10 @@ object Main {
     var root: Node = null
 
     // Colors of the nodes
-    var node_colors: Map[Node, Color] = null
+    var nodes_color: Map[Node, Color] = null
+
+    // Depth of the nodes inside the tree, for visualisation
+    var nodes_depth: Map[Node, Int] = null
 
     // Stack of nodes to check
     var nodes_todo: Seq[Node] = null
@@ -85,23 +88,24 @@ object Main {
         val current_node = nodes_todo.head
 
         // set its color to gray
-        node_colors += (current_node -> Color.Gray)
+        nodes_color += (current_node -> Color.Gray)
 
         // go through the adjacency list to find the neighbors of the current node
         for ((source, targets) <- edges) {
           if (source == current_node) {
 
             // check if any neighbors are still colored white
-            targets.find(node_colors(_) == Color.White) match {
+            targets.find(nodes_color(_) == Color.White) match {
               case Some(target) =>
                 // If a white neighbor is found, it gets pushed on the stack and
                 // its parent is set to the current node.
                 node_parents += (target -> source)
+                nodes_depth += (target -> (nodes_depth(source) + 1))
                 nodes_todo = target +: nodes_todo
               case None =>
                 // If no white neighbor is found, this node is finished. It will be
                 // colored black and removed from the stack.
-                node_colors += (current_node -> Color.Black)
+                nodes_color += (current_node -> Color.Black)
                 nodes_todo = nodes_todo.tail
             }
           }
@@ -112,22 +116,19 @@ object Main {
     // Useful functions
     def reset(): Unit = {
       if (null == root) root = nodes(0)
-      node_colors = nodes.map(n => n -> Color.White).toMap
+      nodes_color = nodes.map(n => n -> Color.White).toMap
+      nodes_depth = nodes.map(n => n -> -1).toMap
+      nodes_depth += (root -> 0)
       nodes_todo = Seq(root)
       node_parents = Map[Node, Node]()
     }
 
-    def select_node(node: Node): Unit = {
+    def set_root(node: Node): Unit = {
       root = node
       reset()
     }
-/*
-    def get_node_graph_pos(node: Node): Vec2 = {
-      return Vec2(
-        (node.id % nodes_columns) * nodes_margin + graph_x,
-        (node.id / nodes_columns) * nodes_margin + graph_y)
-    }
-*/
+
+    // Layouting for the graph and tree
     def get_node_graph_pos(node: Node): Vec2 = {
       val index = nodes.indexOf(node)
       val angle = toRadians(360.0 / nodes.length * index)
@@ -136,22 +137,10 @@ object Main {
         graph_y + (sin(angle) * nodes_layout_radius))
     }
 
-    def get_node_tree_depth(node: Node): Int = {
-      var depth = -1
-      var current_node = node
-      while (null != current_node) {
-        current_node = node_parents.getOrElse(current_node, null)
-        depth += 1
-      }
-      if (0 == depth && node != root)
-        return -1
-      return depth
-    }
-
     def get_node_tree_pos(node: Node): Vec2 = {
-      val depth = get_node_tree_depth(node)
-      val siblings = nodes.filter(get_node_tree_depth(_) == depth).sortBy(_.id)
-      val index = siblings.indexOf(node)
+      val depth    = nodes_depth(node)
+      val siblings = nodes.filter(nodes_depth(_) == depth).sortBy(_.id)
+      val index    = siblings.indexOf(node)
 
       return Vec2(
         index * nodes_margin + tree_x,
@@ -166,7 +155,7 @@ object Main {
       "ABCDEFGHIJKLMNOPQRSTUVWXYZ abcdefghijklmnopqrstuvwxyz0123456789.,!?'\"-+=/\\%()<>:;_[]{}^µ", 8, 8)
 
     // Map of the displayed node colors, used for fading
-    var displayed_node_colors: Map[Node, Color] = nodes.map(n => n -> Color.White).toMap
+    var displayed_nodes_color: Map[Node, Color] = nodes.map(n => n -> Color.White).toMap
     var graph_node_circles: Map[Node, Circle] = nodes.map(n => n -> Circle(get_node_graph_pos(n), nodes_size / 2)).toMap
 
 
@@ -204,7 +193,7 @@ object Main {
           case KeyEvent(KeyEvent.Mouse_1, true) =>
             nodes
               .filter  { node => Circle.contains_point(graph_node_circles(node), mouse_pos) }
-              .foreach { node => select_node(node) }
+              .foreach { node => set_root(node) }
             buttons
               .filter  { button => button.enabled() && Rectangle.contains_point(button.bounds, mouse_pos) }
               .foreach { button => button.action() }
@@ -311,8 +300,8 @@ object Main {
 
       for (node <- nodes) {
         val border_color = if (nodes_todo.contains(node)) Color.Red else Color.Black
-        val fill_color = (displayed_node_colors(node) + node_colors(node)) * 0.5f
-        displayed_node_colors += (node -> fill_color)
+        val fill_color = (displayed_nodes_color(node) + nodes_color(node)) * 0.5f
+        displayed_nodes_color += (node -> fill_color)
         draw_graph_node(node, border_color, fill_color)
       }
 
