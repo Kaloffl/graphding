@@ -44,9 +44,9 @@ trait RenderTarget {
   }
 
   def fill_circle(center_x: Int, center_y: Int, radius: Int, color: Color): Unit = {
-    val r2 = radius * radius
+    val r_sq = radius * radius
     for (y <- 0 to radius; x  <- 0 to radius) {
-      if (x * x + y * y <= r2) {
+      if (x * x + y * y <= r_sq) {
         set_pixel(center_x + x, center_y + y, color)
         set_pixel(center_x + x, center_y - y, color)
         set_pixel(center_x - x, center_y + y, color)
@@ -55,10 +55,12 @@ trait RenderTarget {
     }
   }
 
-  def draw_circle(center_x: Int, center_y: Int, radius: Int, color: Color): Unit = {
+  def draw_circle(center_x: Int, center_y: Int, radius: Int, line_width: Int = 1, color: Color): Unit = {
+    val r1_sq = radius * radius
+    val r2_sq = (radius - line_width) * (radius - line_width)
     for (y <- 0 to radius; x  <- 0 to radius) {
-      val d = sqrt(x * x + y * y) - radius
-      if (-1 < d && d < 1) {
+      val d_sq = x * x + y * y
+      if (r2_sq <= d_sq && d_sq <= r1_sq) {
         set_pixel(center_x + x, center_y + y, color)
         set_pixel(center_x + x, center_y - y, color)
         set_pixel(center_x - x, center_y + y, color)
