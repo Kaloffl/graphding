@@ -1,5 +1,4 @@
 import ui.Color
-import ui.MultisamplingFilter
 import ui.FontRenderer
 import ui.JfxDisplay
 import ui.KeyEvent
@@ -20,9 +19,9 @@ object Main {
   val arrow_tip_length       =  10
   val nodes_layout_radius    = 150
   val graph_x                = 200
-  val graph_y                = 200
+  val graph_y                = 300
   val tree_x                 = 450
-  val tree_y                 =  50
+  val tree_y                 = 150
   val button_border_width    =   2
 
   // Datatype to represent the graph and tree
@@ -148,11 +147,8 @@ object Main {
     }
 
     // Drawing stuff
-    val real_window = new JfxDisplay(800, 600,"👉😎👉 Zoop!")
-    val window = new MultisamplingFilter(real_window, multisampling)
-    val font = new FontRenderer(
-      "font.png",
-      "ABCDEFGHIJKLMNOPQRSTUVWXYZ abcdefghijklmnopqrstuvwxyz0123456789.,!?'\"-+=/\\%()<>:;_[]{}^µ", 8, 8)
+    val window = new JfxDisplay(800, 600,"👉😎👉 Zoop!")
+    val font_renderer = new FontRenderer(FontRenderer.load("Arial.fnt"), 16.0f, 0.45f)
 
     // Map of the displayed node colors, used for fading
     var displayed_nodes_color: Map[Node, Color] = nodes.map(n => n -> Color.White).toMap
@@ -186,7 +182,7 @@ object Main {
       val start_time = System.nanoTime()
 
       // Handle User Inputs
-      for (event <- real_window.events) {
+      for (event <- window.events) {
         event match {
           case KeyEvent(KeyEvent.Key_Space, true) => step()
 
@@ -225,12 +221,13 @@ object Main {
         val circle = graph_node_circles(node)
         val x = circle.center.x.toInt
         val y = circle.center.y.toInt
-        window.fill_circle(x, y, circle.radius.toInt - nodes_border_width, fill_color)
-        window.draw_circle(x, y, circle.radius.toInt, nodes_border_width, border_color)
+        window.fill_circle(x, y, nodes_size / 2, border_color)
+        window.fill_circle(x, y, nodes_size / 2 - nodes_border_width, fill_color)
         val text = String.valueOf(node.id)
-        val text_x = x - (font.char_width * text.length) / 2
-        val text_y = y - font.char_height / 2
-        font.draw(window, text_x, text_y, text, border_color)
+        val (label_width, label_height) = font_renderer.calculate_bounds(text, 16)
+        val text_x = x - label_width / 2
+        val text_y = y + label_height / 2
+        font_renderer.draw(window, text_x, text_y, text, 16, border_color)
       }
 
       def draw_tree_node(node: Node, border_color: Color, fill_color: Color): Unit = {
@@ -240,9 +237,10 @@ object Main {
         window.fill_circle(x, y, nodes_size / 2, border_color)
         window.fill_circle(x, y, nodes_size / 2 - nodes_border_width, fill_color)
         val text = String.valueOf(node.id)
-        val text_x = x - (font.char_width * text.length) / 2
-        val text_y = y - font.char_height / 2
-        font.draw(window, text_x, text_y, text, border_color)
+        val (label_width, label_height) = font_renderer.calculate_bounds(text, 16)
+        val text_x = x - label_width / 2
+        val text_y = y + label_height / 2
+        font_renderer.draw(window, text_x, text_y, text, 16, border_color)
       }
 
       def draw_button(button: Button): Unit = {
@@ -261,11 +259,14 @@ object Main {
           line_width = button_border_width,
           color = if (button.enabled()) Color.Black else Color.Gray)
 
-        font.draw(
+        val (label_width, label_height) = font_renderer.calculate_bounds(button.text, 16)
+
+        font_renderer.draw(
           window,
-          x = (button.bounds.center.x).toInt - (font.char_width * button.text.length).toInt / 2,
-          y = (button.bounds.center.y).toInt - (font.char_height).toInt / 2,
-          string = button.text,
+          x = (button.bounds.center.x).toInt - label_width / 2,
+          y = (button.bounds.center.y).toInt + 16 / 2,
+          text = button.text,
+          size = 16,
           color = if (button.enabled()) Color.Black else Color.Gray)
       }
 
@@ -290,11 +291,10 @@ object Main {
 
       if (null != root) {
         val circle = graph_node_circles(root)
-        window.draw_circle(
+        window.fill_circle(
           circle.center.x.toInt,
           circle.center.y.toInt,
           circle.radius.toInt + selection_border_width,
-          selection_border_width,
           Color.Red)
       }
 
@@ -322,6 +322,7 @@ object Main {
       // Wait for Frame time and draw to screen
       val end_time = System.nanoTime()
       val dur_ms = Math.ceil((end_time - start_time) / 1000000).toInt
+      println(dur_ms)
       if (dur_ms < 30) Thread.sleep(33 - dur_ms)
 
       window.commit()

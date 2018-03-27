@@ -18,16 +18,27 @@ class JfxDisplay(
 
   var int_buffer: Array[Int] = new Array[Int](width * height)
 
-  override def set_pixel(x: Int, y: Int, color: Color) {
+  override def set_pixel(x: Int, y: Int, color: Color, alpha: Float = 1f) {
     if (x >= 0 && x < width && y >= 0 && y < height) {
-      val rgb = Color.to_srgb(color)
-      int_buffer(x + y * width) = 0xFF000000 | rgb
+      if (1 == alpha) {
+        val rgb = Color.to_srgb(color)
+        int_buffer(x + y * width) = 0xFF000000 | rgb
+      } else {
+        val old_color = Color.from_srgb(int_buffer(x + y * width))
+        val new_color = Color.lerp(old_color, color, alpha)
+        val rgb = Color.to_srgb(new_color)
+        int_buffer(x + y * width) = 0xFF000000 | rgb
+      }
     }
   }
 
-  override def fill(color: Color): Unit = {
-    val rgb = Color.to_srgb(color)
-    util.Arrays.fill(int_buffer, 0xFF000000 | rgb)
+  override def fill(color: Color, alpha: Float = 1f): Unit = {
+    if (1 == alpha) {
+      val rgb = Color.to_srgb(color)
+      util.Arrays.fill(int_buffer, 0xFF000000 | rgb)
+    } else {
+      super.fill(color, alpha)
+    }
   }
 
   override def commit(): Unit = {
