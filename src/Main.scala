@@ -226,8 +226,8 @@ object Main {
         val text = String.valueOf(node.id)
         val (label_width, label_height) = font_renderer.calculate_bounds(text, 16)
         val text_x = x - label_width / 2
-        val text_y = y + label_height / 2
-        font_renderer.draw(window, text_x, text_y, text, 16, border_color)
+        val text_y = y + 5
+        font_renderer.draw(window, text_x, text_y, text, 16, 0.5f, border_color)
       }
 
       def draw_tree_node(node: Node, border_color: Color, fill_color: Color): Unit = {
@@ -239,8 +239,8 @@ object Main {
         val text = String.valueOf(node.id)
         val (label_width, label_height) = font_renderer.calculate_bounds(text, 16)
         val text_x = x - label_width / 2
-        val text_y = y + label_height / 2
-        font_renderer.draw(window, text_x, text_y, text, 16, border_color)
+        val text_y = y + 5
+        font_renderer.draw(window, text_x, text_y, text, 16, 0.5f, border_color)
       }
 
       def draw_button(button: Button): Unit = {
@@ -249,7 +249,7 @@ object Main {
           y1 = button.bounds.top.toInt,
           x2 = button.bounds.right.toInt,
           y2 = button.bounds.bottom.toInt,
-          color = Color.White)
+          color = if (Rectangle.contains_point(button.bounds, mouse_pos)) Color.Light_Gray else Color.White)
 
         window.draw_rect(
           x1 = button.bounds.left.toInt,
@@ -264,9 +264,10 @@ object Main {
         font_renderer.draw(
           window,
           x = (button.bounds.center.x).toInt - label_width / 2,
-          y = (button.bounds.center.y).toInt + 16 / 2,
+          y = (button.bounds.center.y).toInt + 5,
           text = button.text,
           size = 16,
+          threshold = 0.5f,
           color = if (button.enabled()) Color.Black else Color.Gray)
       }
 

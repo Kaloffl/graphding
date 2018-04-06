@@ -23,7 +23,9 @@ object FontRenderer {
     values: Array[Float]) {
 
     def distance_at(x: Int, y: Int): Float = {
-      return values(x + y * buffer_width)
+      val clamped_x = max(0, min(buffer_width  - 1, x))
+      val clamped_y = max(0, min(buffer_height - 1, y))
+      return values(clamped_x + clamped_y * buffer_width)
     }
 
     def distance_at(x: Float, y: Float): Float = {
@@ -116,6 +118,8 @@ class FontRenderer(
   val b: Float) {
 
   def calculate_bounds(text: String, size: Float): (Int, Int) = {
+    var min_x = Int.MaxValue
+    var min_y = Int.MaxValue
     var max_x = 0
     var max_y = 0
     val scaling = size / font_data.size
@@ -129,10 +133,12 @@ class FontRenderer(
       } else {
         val char_data = font_data.characters(c)
         ix += font_data.kernings.getOrElse((prev_char, c), 0)
-        val tx = ((ix + char_data.tx) * scaling).toInt
-        val ty = ((iy + char_data.ty) * scaling).toInt
-        val w = (char_data.tw * scaling).toInt
-        val h = (char_data.th * scaling).toInt
+        val tx = ((ix + char_data.tx) * scaling + 0.5f).toInt
+        val ty = ((iy + char_data.ty) * scaling + 0.5f).toInt
+        val w = (char_data.tw * scaling + 0.5f).toInt
+        val h = (char_data.th * scaling + 0.5f).toInt
+        min_x = min(min_x, tx)
+        min_y = min(min_y, ty)
         max_x = max(max_x, tx + w)
         max_y = max(max_y, ty + h)
         ix += char_data.tw - font_data.paddings(1) - font_data.paddings(3)
@@ -140,15 +146,16 @@ class FontRenderer(
       prev_char = c
     }
 
-    return (max_x, max_y)
+    return (max_x - min_x, max_y - min_y)
   }
 
-  def draw(target: RenderTarget, x: Int, y: Int, text: String, size: Float, color: Color): Unit = {
+  def draw_approximated(target: RenderTarget, x: Int, y: Int, text: String, size: Float, threshold: Float, color: Color): Unit = {
     val scaling = size / font_data.size
     val inverse_scaling = font_data.size / size
     var ix = 0//-font_data.paddings(3)
     var iy = -font_data.base// - font_data.paddings(0)
     var prev_char = '\u0000'
+    var dists = new Array[Float](0)
     for (c <- text) {
       if ('\n' == c) {
         ix = -font_data.paddings(3)
@@ -157,26 +164,136 @@ class FontRenderer(
         val char_data = font_data.characters(c)
         val page = font_data.pages(char_data.page)
         ix += font_data.kernings.getOrElse((prev_char, c), 0)
-        val tx = ((ix + char_data.tx) * scaling).toInt + x
-        val ty = ((iy + char_data.ty) * scaling).toInt + y
-        val w = (char_data.sw * scaling).toInt
-        val h = (char_data.sh * scaling).toInt
+
+        val pw = (char_data.sw * scaling + 0.5f).toInt
+        val ph = (char_data.sh * scaling + 0.5f).toInt
+
+        val buffer_rows = pw + 2
+        val buffer_cols = ph + 2
+
+        val buffer_size = buffer_rows * buffer_cols
+        if (dists.length < buffer_size) {
+          dists = new Array[Float](buffer_size)
+        }
+
+        java.util.Arrays.fill(dists, 0, buffer_size, Float.MaxValue)
+        var di = buffer_rows + 1
         var sy: Float = char_data.sy
-        for (py <- ty until ty + h) {
+        for (py <- 0 until ph) {
           var sx: Float = char_data.sx
-          for (px <- tx until tx + w) {
-            val dist = (page.distance_at(sx, sy) - b) * a
-            if (dist < 1) {
-              val alpha = 1f - max(0f, min(1f, dist))
-              target.set_pixel(px, py, color, alpha)
-            }
+          for (px <- 0 until pw) {
+            dists(di) = page.distance_at(sx, sy) - threshold
+            di += 1
             sx += inverse_scaling
           }
+          di += 2
           sy += inverse_scaling
+        }
+
+        val start_x = ((ix + char_data.tx) * scaling + 0.5f).toInt + x
+        val start_y = ((iy + char_data.ty) * scaling + 0.5f).toInt + y
+        val end_x = start_x + pw
+        val end_y = start_y + ph
+        di = buffer_rows + 1
+        for (py <- start_y until end_y) {
+          for (px <- start_x until end_x) {
+            val dist = dists(di)
+            val in = dist <= 0
+
+            val dist_l = dists(di - 1)
+            val dist_r = dists(di + 1)
+            val dist_t = dists(di - buffer_rows)
+            val dist_b = dists(di + buffer_rows)
+
+            val in_l = dist_l <= 0
+            val in_r = dist_r <= 0
+            val in_t = dist_t <= 0
+            val in_b = dist_b <= 0
+
+            if (in == in_l && in == in_r && in == in_t && in == in_b) {
+              if (in) target.set_pixel(px, py, color)
+            } else {
+
+              val in_tl = dists(di - 1 - buffer_rows) <= 0
+              val in_tr = dists(di + 1 - buffer_rows) <= 0
+              val in_bl = dists(di - 1 + buffer_rows) <= 0
+              val in_br = dists(di + 1 + buffer_rows) <= 0
+
+              def clip(f: Float): Float = if (0 <= f && f <= 0.5f) 0.5f - f else 0f
+
+              var ch = 1f - clip(dist / (dist - dist_t)) - clip(dist / (dist - dist_b))
+              var cv = 1f - clip(dist / (dist - dist_l)) - clip(dist / (dist - dist_r))
+
+              val coverage = min(ch, cv)
+              if (in) {
+                target.set_pixel(px, py, color, coverage)
+              } else {
+                target.set_pixel(px, py, color, 1.0f - coverage)
+              }
+            }
+            di += 1
+          }
+          di += 2
         }
         ix += char_data.tw - font_data.paddings(1) - font_data.paddings(3)
       }
       prev_char = c
     }
   }
+
+  def draw_multisampled(target: RenderTarget, x: Int, y: Int, text: String, size: Float, threshold: Float, color: Color): Unit = {
+    val scaling = size / font_data.size
+    val inverse_scaling = font_data.size / size
+    var ix = 0//-font_data.paddings(3)
+    var iy = -font_data.base// - font_data.paddings(0)
+    var prev_char = '\u0000'
+    val multisampling = 4
+    val ms_width = 1.0f / multisampling
+    val ms_area = ms_width * ms_width
+    val mss = ms_width * inverse_scaling
+    for (c <- text) {
+      if ('\n' == c) {
+        ix = -font_data.paddings(3)
+        iy += font_data.line_height - font_data.paddings(0) - font_data.paddings(2)
+      } else {
+        val char_data = font_data.characters(c)
+        val page = font_data.pages(char_data.page)
+        ix += font_data.kernings.getOrElse((prev_char, c), 0)
+
+        val pw = (char_data.sw * scaling + 0.5f).toInt
+        val ph = (char_data.sh * scaling + 0.5f).toInt
+
+        val start_x = ((ix + char_data.tx) * scaling + 0.5f).toInt + x
+        val start_y = ((iy + char_data.ty) * scaling + 0.5f).toInt + y
+
+        for (py <- 0 until ph; px <- 0 until pw) {
+
+          var coverage = 0
+          var sy = char_data.sy + (py + (0.5f - multisampling / 2) * ms_width) * inverse_scaling
+          for (my <- 0 until multisampling) {
+            var sx = char_data.sx + (px + (0.5f - multisampling / 2) * ms_width) * inverse_scaling
+            for (mx <- 0 until multisampling) {
+              if (page.distance_at(sx, sy) <= threshold) {
+                coverage += 1
+              }
+              sx += mss
+            }
+            sy += mss
+          }
+          target.set_pixel(start_x + px, start_y + py, color, coverage * ms_area)
+        }
+        ix += char_data.tw - font_data.paddings(1) - font_data.paddings(3)
+      }
+      prev_char = c
+    }
+  }
+
+  def draw(target: RenderTarget, x: Int, y: Int, text: String, size: Float, threshold: Float, color: Color): Unit = {
+    if (size < 20) {
+      draw_multisampled(target, x, y, text, size, threshold, color)
+    } else {
+      draw_approximated(target, x, y, text, size, threshold, color)
+    }
+  }
+
 }
