@@ -4,6 +4,8 @@ import ui.FontRenderer
 import ui.JfxDisplay
 import ui.KeyEvent
 import ui.MouseEvent
+import java.nio.file.{Paths, Files}
+import java.nio.charset.StandardCharsets
 
 import java.lang.Math._
 
@@ -25,6 +27,8 @@ object Main {
   val tree_y                 =  50
   val button_border_width    =   2
 
+  //edges and nodes
+
   // Datatype to represent the graph and tree
   case class Node(id: Int)
 
@@ -36,10 +40,14 @@ object Main {
     action : () => Unit)
 
 
+
+
   def main(args: Array[String]): Unit = {
 
+    //load defaults
+
     // Set of all Nodes
-    val nodes =
+   var nodes =
       Array(
         Node(id = 0),
         Node(id = 1),
@@ -52,7 +60,7 @@ object Main {
         Node(id = 8))
 
     // Set of directed edges between the nodes
-    val edges =
+   var edges =
       Seq[(Node, Seq[Node])](
         (nodes(0), Seq(nodes(1), nodes(3))),
         (nodes(1), Seq(nodes(3), nodes(4))),
@@ -112,6 +120,37 @@ object Main {
         }
       }
     }
+
+
+
+      def load_graphs(): Boolean = {
+
+          
+
+
+        
+        return true;
+      }
+
+      def save_tree(): Boolean = {
+        
+
+        var str_edges = "edges="
+
+          for ((source, targets) <- edges) {
+             str_edges +=  source.id + "("
+             for (target <- targets) {
+                str_edges += target.id + ","
+             }
+             str_edges += ");"
+          }
+
+
+        Files.write(Paths.get("main_graph.ini"), (str_edges).getBytes(StandardCharsets.UTF_8))
+
+
+        return true;
+      }
 
     // Useful functions
     def reset(): Unit = {
@@ -177,7 +216,27 @@ object Main {
           y2 = (window.height * 0.95)),
         text = "Reset",
         enabled = { () => true },
-        action  = { () => reset() }))
+        action  = { () => reset() }),
+        Button(
+        Rectangle(
+          x1 = (window.width  * 0.55),
+          y1 = (window.height * 0.9),
+          x2 = (window.width  * 0.65),
+          y2 = (window.height * 0.95)),
+        text = "Load",
+        enabled = { () => true },
+        action  = { () => load_graphs() }),
+        Button(
+        Rectangle(
+          x1 = (window.width  * 0.40),
+          y1 = (window.height * 0.9),
+          x2 = (window.width  * 0.50),
+          y2 = (window.height * 0.95)),
+        text = "Save",
+        enabled = { () => true },
+        action  = { () => save_tree() })
+
+    )
 
     reset()
     var mouse_pos: Vec2 = Vec2.Origin

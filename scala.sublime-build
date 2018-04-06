@@ -1,0 +1,19 @@
+ {
+    "working_dir": "${project_path:${folder}}",
+    "selector"   : "source.scala",
+
+    "variants": [
+        {
+            "name": "Run",
+            "cmd" : "run.bat ${file_base_name}"
+        },
+        {
+            "name": "Build All",
+            "cmd" : "build_all.bat"
+        },
+        {
+            "name": "Build File",
+            "cmd" : "build_single.bat $file"
+        }
+    ]
+}
