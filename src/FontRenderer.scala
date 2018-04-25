@@ -42,7 +42,7 @@ object FontRenderer {
     val scanner = new Scanner(new File(font_file))
     var pages = Seq[String]()
     var chars = Map[Char, CharData]()
-    var kernings = Map[(Char, Char), Int]()
+    var kernings = Map[String, Int]()
     var line_height = 0
     var base = 0
     var size = 0
@@ -81,7 +81,7 @@ object FontRenderer {
           val first  = Integer.parseInt(parts(2)).toChar
           val second = Integer.parseInt(parts(4)).toChar
           val amount = Integer.parseInt(parts(6))
-          kernings += ((first, second) -> amount)
+          kernings += (s"$first$second" -> amount)
         case _ =>
       }
     }
@@ -110,40 +110,47 @@ class FontData(
   val paddings: Array[Int],
   val pages: Seq[FontRenderer.CharsetSdf],
   val characters: Map[Char, FontRenderer.CharData],
-  val kernings: Map[(Char, Char), Int])
+  val kernings: Map[String, Int])
 
 class FontRenderer(
-  val font_data: FontData,
-  val a: Float,
-  val b: Float) {
+  val font_data: FontData) {
 
   def calculate_bounds(text: String, size: Float): (Int, Int) = {
     var min_x = Int.MaxValue
     var min_y = Int.MaxValue
-    var max_x = 0
-    var max_y = 0
+    var max_x = Int.MinValue
+    var max_y = Int.MinValue
     val scaling = size / font_data.size
-    var ix = -font_data.paddings(3)
-    var iy = -font_data.paddings(0)
-    var prev_char = '\u0000'
-    for (c <- text) {
+    val inverse_scaling = font_data.size / size
+    var ix = -font_data.characters(text(0)).tx
+    var iy = -font_data.base
+    for (ci <- 0 until text.length) {
+      val c = text.charAt(ci)
       if ('\n' == c) {
-        ix = -font_data.paddings(3)
-        iy += font_data.line_height - font_data.paddings(0) - font_data.paddings(2)
+        if (ci + 1 < text.length) {
+          ix = -font_data.characters(text(ci + 1)).tx
+          iy += font_data.line_height - font_data.paddings(0) - font_data.paddings(2)
+        }
       } else {
         val char_data = font_data.characters(c)
-        ix += font_data.kernings.getOrElse((prev_char, c), 0)
-        val tx = ((ix + char_data.tx) * scaling + 0.5f).toInt
-        val ty = ((iy + char_data.ty) * scaling + 0.5f).toInt
-        val w = (char_data.tw * scaling + 0.5f).toInt
-        val h = (char_data.th * scaling + 0.5f).toInt
-        min_x = min(min_x, tx)
-        min_y = min(min_y, ty)
-        max_x = max(max_x, tx + w)
-        max_y = max(max_y, ty + h)
+        val page = font_data.pages(char_data.page)
+        if (0 != ci) {
+          ix += font_data.kernings.getOrElse(text.substring(ci - 1, ci), 0)
+        }
+
+        val pw = (char_data.sw * scaling + 0.5f).toInt
+        val ph = (char_data.sh * scaling + 0.5f).toInt
+
+        val start_x = ((ix + char_data.tx) * scaling + 0.5f).toInt
+        val start_y = ((iy + char_data.ty) * scaling + 0.5f).toInt
+
+        min_x = min(min_x, start_x)
+        min_y = min(min_y, start_y)
+        max_x = max(max_x, start_x + pw)
+        max_y = max(max_y, start_y + ph)
+
         ix += char_data.tw - font_data.paddings(1) - font_data.paddings(3)
       }
-      prev_char = c
     }
 
     return (max_x - min_x, max_y - min_y)
@@ -152,18 +159,22 @@ class FontRenderer(
   def draw_approximated(target: RenderTarget, x: Int, y: Int, text: String, size: Float, threshold: Float, color: Color): Unit = {
     val scaling = size / font_data.size
     val inverse_scaling = font_data.size / size
-    var ix = 0//-font_data.paddings(3)
-    var iy = -font_data.base// - font_data.paddings(0)
-    var prev_char = '\u0000'
+    var ix = -font_data.characters(text(0)).tx
+    var iy = -font_data.base
     var dists = new Array[Float](0)
-    for (c <- text) {
+    for (ci <- 0 until text.length) {
+      val c = text.charAt(ci)
       if ('\n' == c) {
-        ix = -font_data.paddings(3)
-        iy += font_data.line_height - font_data.paddings(0) - font_data.paddings(2)
+        if (ci + 1 < text.length) {
+          ix = -font_data.characters(text(ci + 1)).tx
+          iy += font_data.line_height - font_data.paddings(0) - font_data.paddings(2)
+        }
       } else {
         val char_data = font_data.characters(c)
         val page = font_data.pages(char_data.page)
-        ix += font_data.kernings.getOrElse((prev_char, c), 0)
+        if (0 != ci) {
+          ix += font_data.kernings.getOrElse(text.substring(ci - 1, ci), 0)
+        }
 
         val pw = (char_data.sw * scaling + 0.5f).toInt
         val ph = (char_data.sh * scaling + 0.5f).toInt
@@ -237,28 +248,32 @@ class FontRenderer(
         }
         ix += char_data.tw - font_data.paddings(1) - font_data.paddings(3)
       }
-      prev_char = c
     }
   }
 
   def draw_multisampled(target: RenderTarget, x: Int, y: Int, text: String, size: Float, threshold: Float, color: Color): Unit = {
     val scaling = size / font_data.size
     val inverse_scaling = font_data.size / size
-    var ix = 0//-font_data.paddings(3)
-    var iy = -font_data.base// - font_data.paddings(0)
-    var prev_char = '\u0000'
+    var ix = -font_data.characters(text(0)).tx
+    var iy = -font_data.base
     val multisampling = 4
     val ms_width = 1.0f / multisampling
     val ms_area = ms_width * ms_width
     val mss = ms_width * inverse_scaling
-    for (c <- text) {
+    val mso = (0.5f - multisampling / 2) * ms_width
+    for (ci <- 0 until text.length) {
+      val c = text.charAt(ci)
       if ('\n' == c) {
-        ix = -font_data.paddings(3)
-        iy += font_data.line_height - font_data.paddings(0) - font_data.paddings(2)
+        if (ci + 1 < text.length) {
+          ix = -font_data.characters(text(ci + 1)).tx
+          iy += font_data.line_height - font_data.paddings(0) - font_data.paddings(2)
+        }
       } else {
         val char_data = font_data.characters(c)
         val page = font_data.pages(char_data.page)
-        ix += font_data.kernings.getOrElse((prev_char, c), 0)
+        if (0 != ci) {
+          ix += font_data.kernings.getOrElse(text.substring(ci - 1, ci), 0)
+        }
 
         val pw = (char_data.sw * scaling + 0.5f).toInt
         val ph = (char_data.sh * scaling + 0.5f).toInt
@@ -269,9 +284,9 @@ class FontRenderer(
         for (py <- 0 until ph; px <- 0 until pw) {
 
           var coverage = 0
-          var sy = char_data.sy + (py + (0.5f - multisampling / 2) * ms_width) * inverse_scaling
+          var sy = char_data.sy + (py + mso) * inverse_scaling
           for (my <- 0 until multisampling) {
-            var sx = char_data.sx + (px + (0.5f - multisampling / 2) * ms_width) * inverse_scaling
+            var sx = char_data.sx + (px + mso) * inverse_scaling
             for (mx <- 0 until multisampling) {
               if (page.distance_at(sx, sy) <= threshold) {
                 coverage += 1
@@ -284,7 +299,6 @@ class FontRenderer(
         }
         ix += char_data.tw - font_data.paddings(1) - font_data.paddings(3)
       }
-      prev_char = c
     }
   }
 

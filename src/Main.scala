@@ -3,6 +3,7 @@ import ui.FontRenderer
 import ui.JfxDisplay
 import ui.KeyEvent
 import ui.MouseEvent
+import java.util.concurrent.atomic.AtomicInteger
 
 import java.lang.Math._
 
@@ -13,15 +14,16 @@ object Main {
   val nodes_columns          =   3
   val nodes_margin           =  70
   val nodes_size             =  50
+  val font_size              =  22
   val nodes_border_width     =   2
   val selection_border_width =   3
   val line_width             =   2
   val arrow_tip_length       =  10
   val nodes_layout_radius    = 150
   val graph_x                = 200
-  val graph_y                = 300
+  val graph_y                = 200
   val tree_x                 = 450
-  val tree_y                 = 150
+  val tree_y                 =  50
   val button_border_width    =   2
 
   // Datatype to represent the graph and tree
@@ -34,7 +36,7 @@ object Main {
     enabled: () => Boolean,
     action : () => Unit)
 
-
+  // Entry point of the Program
   def main(args: Array[String]): Unit = {
 
     // Set of all Nodes
@@ -69,13 +71,13 @@ object Main {
     // Colors of the nodes
     var nodes_color: Map[Node, Color] = null
 
-    // Depth of the nodes inside the tree, for visualisation
+    // Depth of the Nodes inside the tree, for visualisation
     var nodes_depth: Map[Node, Int] = null
 
-    // Stack of nodes to check
+    // Stack of Nodes to check
     var nodes_todo: Seq[Node] = null
 
-    // Set of tree nodes created by the algorithm.
+    // Map of the parent Nodes of each node. Null if Node has no parent
     var node_parents: Map[Node, Node] = null
 
     // The actual depth-first-search algorithm that we want to visualize
@@ -148,7 +150,7 @@ object Main {
 
     // Drawing stuff
     val window = new JfxDisplay(800, 600,"👉😎👉 Zoop!")
-    val font_renderer = new FontRenderer(FontRenderer.load("Arial.fnt"), 16.0f, 0.45f)
+    val font_renderer = new FontRenderer(FontRenderer.load("Arial.fnt"))
 
     // Map of the displayed node colors, used for fading
     var displayed_nodes_color: Map[Node, Color] = nodes.map(n => n -> Color.White).toMap
@@ -158,19 +160,19 @@ object Main {
     val buttons = Array(
       Button(
         Rectangle(
-          x1 = (window.width  * 0.7),
-          y1 = (window.height * 0.9),
+          x1 = (window.width  * 0.65),
+          y1 = (window.height * 0.875),
           x2 = (window.width  * 0.8),
-          y2 = (window.height * 0.95)),
+          y2 = (window.height * 0.975)),
         text = "Next step",
         enabled = { () => null != nodes_todo && nodes_todo.nonEmpty },
         action  = { () => step() }),
       Button(
         Rectangle(
-          x1 = (window.width  * 0.85),
-          y1 = (window.height * 0.9),
-          x2 = (window.width  * 0.95),
-          y2 = (window.height * 0.95)),
+          x1 = (window.width  * 0.825),
+          y1 = (window.height * 0.875),
+          x2 = (window.width  * 0.975),
+          y2 = (window.height * 0.975)),
         text = "Reset",
         enabled = { () => true },
         action  = { () => reset() }))
@@ -224,10 +226,10 @@ object Main {
         window.fill_circle(x, y, nodes_size / 2, border_color)
         window.fill_circle(x, y, nodes_size / 2 - nodes_border_width, fill_color)
         val text = String.valueOf(node.id)
-        val (label_width, label_height) = font_renderer.calculate_bounds(text, 16)
+        val (label_width, label_height) = font_renderer.calculate_bounds(text, font_size)
         val text_x = x - label_width / 2
-        val text_y = y + 5
-        font_renderer.draw(window, text_x, text_y, text, 16, 0.5f, border_color)
+        val text_y = y + 6
+        font_renderer.draw(window, text_x, text_y, text, font_size, 0.5f, border_color)
       }
 
       def draw_tree_node(node: Node, border_color: Color, fill_color: Color): Unit = {
@@ -237,19 +239,22 @@ object Main {
         window.fill_circle(x, y, nodes_size / 2, border_color)
         window.fill_circle(x, y, nodes_size / 2 - nodes_border_width, fill_color)
         val text = String.valueOf(node.id)
-        val (label_width, label_height) = font_renderer.calculate_bounds(text, 16)
+        val (label_width, label_height) = font_renderer.calculate_bounds(text, font_size)
         val text_x = x - label_width / 2
-        val text_y = y + 5
-        font_renderer.draw(window, text_x, text_y, text, 16, 0.5f, border_color)
+        val text_y = y + 6
+        font_renderer.draw(window, text_x, text_y, text, font_size, 0.5f, border_color)
       }
 
       def draw_button(button: Button): Unit = {
+        val fill_color = if (Rectangle.contains_point(button.bounds, mouse_pos)) Color.Light_Gray else Color.White
+        val border_color = if (button.enabled()) Color.Black else Color.Gray
+
         window.fill_rect(
           x1 = button.bounds.left.toInt,
           y1 = button.bounds.top.toInt,
           x2 = button.bounds.right.toInt,
           y2 = button.bounds.bottom.toInt,
-          color = if (Rectangle.contains_point(button.bounds, mouse_pos)) Color.Light_Gray else Color.White)
+          color = fill_color)
 
         window.draw_rect(
           x1 = button.bounds.left.toInt,
@@ -257,18 +262,13 @@ object Main {
           x2 = button.bounds.right.toInt,
           y2 = button.bounds.bottom.toInt,
           line_width = button_border_width,
-          color = if (button.enabled()) Color.Black else Color.Gray)
+          color = border_color)
 
-        val (label_width, label_height) = font_renderer.calculate_bounds(button.text, 16)
+        val (label_width, label_height) = font_renderer.calculate_bounds(button.text, font_size)
+        val text_x = (button.bounds.center.x).toInt - label_width / 2
+        val text_y = (button.bounds.center.y).toInt + 6
 
-        font_renderer.draw(
-          window,
-          x = (button.bounds.center.x).toInt - label_width / 2,
-          y = (button.bounds.center.y).toInt + 5,
-          text = button.text,
-          size = 16,
-          threshold = 0.5f,
-          color = if (button.enabled()) Color.Black else Color.Gray)
+        font_renderer.draw(window, text_x, text_y, button.text, font_size, 0.5f, border_color)
       }
 
       for ((source, targets) <- edges; target <- targets) {
