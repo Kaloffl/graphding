@@ -1,11 +1,12 @@
+import java.lang.Math._
+import java.nio.file.{Paths, Files}
+import java.nio.charset.StandardCharsets
 import ui.Color
 import ui.FontRenderer
 import ui.JfxDisplay
 import ui.KeyEvent
 import ui.MouseEvent
-import java.util.concurrent.atomic.AtomicInteger
 
-import java.lang.Math._
 
 object Main {
 
@@ -26,6 +27,8 @@ object Main {
   val tree_y                 =  50
   val button_border_width    =   2
 
+  //edges and nodes
+
   // Datatype to represent the graph and tree
   case class Node(id: Int)
 
@@ -39,8 +42,10 @@ object Main {
   // Entry point of the Program
   def main(args: Array[String]): Unit = {
 
+    //load defaults
+
     // Set of all Nodes
-    val nodes =
+   var nodes =
       Array(
         Node(id = 0),
         Node(id = 1),
@@ -53,7 +58,7 @@ object Main {
         Node(id = 8))
 
     // Set of directed edges between the nodes
-    val edges =
+   var edges =
       Seq[(Node, Seq[Node])](
         (nodes(0), Seq(nodes(1), nodes(3))),
         (nodes(1), Seq(nodes(3), nodes(4))),
@@ -114,6 +119,26 @@ object Main {
       }
     }
 
+    def load_graphs(): Boolean = {      
+      return true;
+    }
+
+    def save_tree(): Boolean = {
+
+      var str_edges = "edges="
+
+      for ((source, targets) <- edges) {
+         str_edges +=  source.id + "("
+         for (target <- targets) {
+            str_edges += target.id + ","
+         }
+         str_edges += ");"
+      }
+
+      Files.write(Paths.get("main_graph.ini"), str_edges.getBytes(StandardCharsets.UTF_8))
+      return true;
+    }
+
     // Useful functions
     def reset(): Unit = {
       if (null == root) root = nodes(0)
@@ -158,6 +183,24 @@ object Main {
 
 
     val buttons = Array(
+      Button(
+        Rectangle(
+          x1 = (window.width  * 0.3),
+          y1 = (window.height * 0.875),
+          x2 = (window.width  * 0.45),
+          y2 = (window.height * 0.975)),
+        text = "Load",
+        enabled = { () => true },
+        action  = { () => load_graphs() }),
+      Button(
+        Rectangle(
+          x1 = (window.width  * 0.475),
+          y1 = (window.height * 0.875),
+          x2 = (window.width  * 0.625),
+          y2 = (window.height * 0.975)),
+        text = "Save",
+        enabled = { () => true },
+        action  = { () => save_tree() }),
       Button(
         Rectangle(
           x1 = (window.width  * 0.65),
