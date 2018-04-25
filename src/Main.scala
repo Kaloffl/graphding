@@ -37,8 +37,9 @@ object Main {
   case class Button(
     bounds: Rectangle,
     text: String,
-    enabled: () => Boolean,
-    action : () => Unit)
+    action   : () => Unit,
+    enabled  : () => Boolean = { () => true },
+    highlight: () => Boolean = { () => false })
 
   // Entry point of the Program
   def main(args: Array[String]): Unit = {
@@ -47,7 +48,7 @@ object Main {
 
     // Set of all Nodes
    var nodes =
-      Array(
+      Seq(
         Node(id = 0),
         Node(id = 1),
         Node(id = 2),
@@ -120,7 +121,7 @@ object Main {
       }
     }
 
-    def load_graphs(): Boolean = {      
+    def load_graphs(): Boolean = {
       return true;
     }
 
@@ -170,6 +171,20 @@ object Main {
       return true;
     }
 
+    def add_node(): Unit = {
+      val new_node = Node(id = nodes.length + 1)
+      nodes = nodes :+ new_node
+      edges = edges :+ (new_node, Seq[Node]())
+      reset()
+    }
+
+    def add_edge(from: Node, to: Node): Unit = {
+      edges = edges.map {
+        case (`from`, targets) if !targets.contains(to) => (from, to +: targets)
+        case t => t
+      }
+    }
+
     // Useful functions
     def reset(): Unit = {
       if (null == root) root = nodes(0)
@@ -209,53 +224,71 @@ object Main {
     val font_renderer = new FontRenderer(FontRenderer.load("Arial.fnt"))
 
     // Map of the displayed node colors, used for fading
-    var displayed_nodes_color: Map[Node, Color] = nodes.map(n => n -> Color.White).toMap
-    var graph_node_circles: Map[Node, Circle] = nodes.map(n => n -> Circle(get_node_graph_pos(n), nodes_size / 2)).toMap
+    var displayed_nodes_color = Map[Node, Color]()
 
+    var edge_adding = false
 
     val buttons = Array(
       Button(
         Rectangle(
-          x1 = (window.width  * 0.3),
-          y1 = (window.height * 0.875),
-          x2 = (window.width  * 0.45),
-          y2 = (window.height * 0.975)),
-        text = "Load",
-        enabled = { () => true },
-        action  = { () => load_graphs() }),
+          x1 = (window.width  * 0.0),
+          y1 = (window.height * 0.95),
+          x2 = (window.width  * 0.15),
+          y2 = (window.height * 1.0)),
+        text   = "Add Node",
+        action = { () => add_node() }),
       Button(
         Rectangle(
-          x1 = (window.width  * 0.475),
-          y1 = (window.height * 0.875),
-          x2 = (window.width  * 0.625),
-          y2 = (window.height * 0.975)),
-        text = "Save",
-        enabled = { () => true },
-        action  = { () => save_graph_and_tree() }),
+          x1 = (window.width  * 0.15),
+          y1 = (window.height * 0.95),
+          x2 = (window.width  * 0.3),
+          y2 = (window.height * 1.0)),
+        text      = "Add Edge",
+        action    = { () => edge_adding = !edge_adding },
+        highlight = { () => edge_adding }),
+
       Button(
         Rectangle(
-          x1 = (window.width  * 0.65),
-          y1 = (window.height * 0.875),
-          x2 = (window.width  * 0.8),
-          y2 = (window.height * 0.975)),
-        text = "Next step",
-        enabled = { () => null != nodes_todo && nodes_todo.nonEmpty },
-        action  = { () => step() }),
+          x1 = (window.width  * 0.35),
+          y1 = (window.height * 0.95),
+          x2 = (window.width  * 0.5),
+          y2 = (window.height * 1.0)),
+        text   = "Load",
+        action = { () => load_graphs() }),
       Button(
         Rectangle(
-          x1 = (window.width  * 0.825),
-          y1 = (window.height * 0.875),
-          x2 = (window.width  * 0.975),
-          y2 = (window.height * 0.975)),
-        text = "Reset",
-        enabled = { () => true },
-        action  = { () => reset() }))
+          x1 = (window.width  * 0.5),
+          y1 = (window.height * 0.95),
+          x2 = (window.width  * 0.65),
+          y2 = (window.height * 1.0)),
+        text   = "Save",
+        action = { () => save_graph_and_tree() }),
+
+      Button(
+        Rectangle(
+          x1 = (window.width  * 0.7),
+          y1 = (window.height * 0.95),
+          x2 = (window.width  * 0.85),
+          y2 = (window.height * 1.0)),
+        text    = "Next step",
+        action  = { () => step() },
+        enabled = { () => null != nodes_todo && nodes_todo.nonEmpty }),
+      Button(
+        Rectangle(
+          x1 = (window.width  * 0.85),
+          y1 = (window.height * 0.95),
+          x2 = (window.width  * 1.0),
+          y2 = (window.height * 1.0)),
+        text   = "Reset",
+        action = { () => reset() }))
 
     reset()
     var mouse_pos: Vec2 = Vec2.Origin
 
     while (true) {
       val start_time = System.nanoTime()
+
+      def graph_node_circle(node: Node) = Circle(get_node_graph_pos(node), nodes_size / 2)
 
       // Handle User Inputs
       for (event <- window.events) {
@@ -264,8 +297,8 @@ object Main {
 
           case KeyEvent(KeyEvent.Mouse_1, true) =>
             nodes
-              .filter  { node => Circle.contains_point(graph_node_circles(node), mouse_pos) }
-              .foreach { node => set_root(node) }
+              .filter  { node => Circle.contains_point(graph_node_circle(node), mouse_pos) }
+              .foreach { node => if (null != root && edge_adding) add_edge(root, node) else set_root(node) }
             buttons
               .filter  { button => button.enabled() && Rectangle.contains_point(button.bounds, mouse_pos) }
               .foreach { button => button.action() }
@@ -294,7 +327,7 @@ object Main {
       }
 
       def draw_graph_node(node: Node, border_color: Color, fill_color: Color): Unit = {
-        val circle = graph_node_circles(node)
+        val circle = graph_node_circle(node)
         val x = circle.center.x.toInt
         val y = circle.center.y.toInt
         window.fill_circle(x, y, nodes_size / 2, border_color)
@@ -320,7 +353,7 @@ object Main {
       }
 
       def draw_button(button: Button): Unit = {
-        val fill_color = if (Rectangle.contains_point(button.bounds, mouse_pos)) Color.Light_Gray else Color.White
+        val fill_color = if (button.highlight() || Rectangle.contains_point(button.bounds, mouse_pos)) Color.Light_Gray else Color.White
         val border_color = if (button.enabled()) Color.Black else Color.Gray
 
         window.fill_rect(
@@ -347,7 +380,7 @@ object Main {
 
       for ((source, targets) <- edges; target <- targets) {
         if (source == target) { // if the edge is a loop, we need a special case to draw it
-          val p1 = graph_node_circles(source).center
+          val p1 = graph_node_circle(source).center
           val n = (p1 - Vec2(graph_x, graph_y)) / nodes_layout_radius
 
           val p2 = p1 + n * (nodes_margin / 2) + Vec2.turn_cw(n)  * (nodes_margin / 8)
@@ -357,15 +390,15 @@ object Main {
           window.draw_line(p2.x.toInt, p2.y.toInt, p3.x.toInt, p3.y.toInt, line_width, Color.Black)
           draw_arrow(p3, p1, Color.Black)
         } else {
-          val p1 = graph_node_circles(source).center
-          val p2 = graph_node_circles(target).center
+          val p1 = graph_node_circle(source).center
+          val p2 = graph_node_circle(target).center
           val color = if (nodes_todo.contains(target) && node_parents.get(target).contains(source)) Color.Red else Color.Black
           draw_arrow(p1, p2, color)
         }
       }
 
       if (null != root) {
-        val circle = graph_node_circles(root)
+        val circle = graph_node_circle(root)
         window.fill_circle(
           circle.center.x.toInt,
           circle.center.y.toInt,
@@ -375,7 +408,8 @@ object Main {
 
       for (node <- nodes) {
         val border_color = if (nodes_todo.contains(node)) Color.Red else Color.Black
-        val fill_color = (displayed_nodes_color(node) + nodes_color(node)) * 0.5f
+        val old_color = displayed_nodes_color.getOrElse(node, Color.White)
+        val fill_color = (old_color + nodes_color(node)) * 0.5f
         displayed_nodes_color += (node -> fill_color)
         draw_graph_node(node, border_color, fill_color)
       }
