@@ -1,3 +1,4 @@
+import java.io.IOException
 import java.lang.Math._
 import java.nio.file.{Paths, Files}
 import java.nio.charset.StandardCharsets
@@ -123,19 +124,49 @@ object Main {
       return true;
     }
 
-    def save_tree(): Boolean = {
-
-      var str_edges = "edges="
+    def graph_to_string(): String = {
+      val builder = new StringBuilder()
+      builder.append("graph=")
 
       for ((source, targets) <- edges) {
-         str_edges +=  source.id + "("
+         builder.append(source.id)
+         builder.append("(")
          for (target <- targets) {
-            str_edges += target.id + ","
+            builder.append(target.id)
+            builder.append(",")
          }
-         str_edges += ");"
+         builder.append(");")
+      }
+      return builder.toString
+    }
+
+    def tree_to_string(): String = {
+      val builder = new StringBuilder()
+      builder.append("tree=")
+
+      for ((child, parent) <- node_parents) {
+        builder.append(parent.id)
+        builder.append("->")
+        builder.append(child.id)
+        builder.append(";")
+      }
+      return builder.toString
+    }
+
+    def save_graph_and_tree(): Boolean = {
+      try {
+        val graph_string = graph_to_string()
+        Files.write(Paths.get("main_graph.ini"), graph_string.getBytes(StandardCharsets.UTF_8))
+      } catch {
+        case _: IOException => return false
+      }
+      try {
+        val tree_string = tree_to_string()
+        Files.write(Paths.get("main_tree.ini"), tree_string.getBytes(StandardCharsets.UTF_8))
+      } catch {
+        case _: IOException => return false
       }
 
-      Files.write(Paths.get("main_graph.ini"), str_edges.getBytes(StandardCharsets.UTF_8))
       return true;
     }
 
@@ -200,7 +231,7 @@ object Main {
           y2 = (window.height * 0.975)),
         text = "Save",
         enabled = { () => true },
-        action  = { () => save_tree() }),
+        action  = { () => save_graph_and_tree() }),
       Button(
         Rectangle(
           x1 = (window.width  * 0.65),
