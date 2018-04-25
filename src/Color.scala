@@ -88,4 +88,6 @@ case class Color(r: Float, g: Float, b: Float) {
   def -(c: Color) = Color(r - c.r, g - c.g, b - c.b)
   def *(c: Color) = Color(r * c.r, g * c.g, b * c.b)
   def *(f: Float) = Color(r * f, g * f, b * f)
+
+  def avg: Float = (r + g + b) / 3
 }

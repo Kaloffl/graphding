@@ -46,8 +46,8 @@ object Main {
 
     //load defaults
 
-    // Set of all Nodes
-   var nodes =
+    // Set of all default Nodes
+   val initial_nodes =
       Seq(
         Node(id = 0),
         Node(id = 1),
@@ -59,18 +59,19 @@ object Main {
         Node(id = 7),
         Node(id = 8))
 
-    // Set of directed edges between the nodes
-   var edges =
+    // default Adjacency List of the Nodes
+    type Edges = Seq[(Node, Seq[Node])]
+    val initial_edges =
       Seq[(Node, Seq[Node])](
-        (nodes(0), Seq(nodes(1), nodes(3))),
-        (nodes(1), Seq(nodes(3), nodes(4))),
-        (nodes(2), Seq(nodes(5))),
-        (nodes(3), Seq(nodes(6), nodes(7))),
-        (nodes(4), Seq(nodes(3), nodes(7))),
-        (nodes(5), Seq(nodes(5), nodes(8))),
-        (nodes(6), Seq()),
-        (nodes(7), Seq(nodes(5), nodes(7))),
-        (nodes(8), Seq()))
+        (initial_nodes(0), Seq(initial_nodes(1), initial_nodes(3))),
+        (initial_nodes(1), Seq(initial_nodes(3), initial_nodes(4))),
+        (initial_nodes(2), Seq(initial_nodes(5))),
+        (initial_nodes(3), Seq(initial_nodes(6), initial_nodes(7))),
+        (initial_nodes(4), Seq(initial_nodes(3), initial_nodes(7))),
+        (initial_nodes(5), Seq(initial_nodes(5), initial_nodes(8))),
+        (initial_nodes(6), Seq()),
+        (initial_nodes(7), Seq(initial_nodes(5), initial_nodes(7))),
+        (initial_nodes(8), Seq()))
 
     // Node that is currently selected as the root node of the search
     var root: Node = null
@@ -87,6 +88,10 @@ object Main {
     // Map of the parent Nodes of each node. Null if Node has no parent
     var node_parents: Map[Node, Node] = null
 
+    // stacks for undo and redo. The head of the history stack is the current state
+    var history = Seq(initial_edges)
+    var future = Seq[Edges]()
+
     // The actual depth-first-search algorithm that we want to visualize
     def step(): Unit = {
       // If there are still nodes on the stack
@@ -99,7 +104,7 @@ object Main {
         nodes_color += (current_node -> Color.Gray)
 
         // go through the adjacency list to find the neighbors of the current node
-        for ((source, targets) <- edges) {
+        for ((source, targets) <- current_state()) {
           if (source == current_node) {
 
             // check if any neighbors are still colored white
@@ -121,15 +126,84 @@ object Main {
       }
     }
 
-    def load_graphs(): Boolean = {
-      return true;
+    def load_graph(): Either[Edges, String] = {
+      val bytes = Files.readAllBytes(Paths.get("main_graph.ini"))
+      val input = new String(bytes, StandardCharsets.UTF_8)
+
+      var nodes = Seq[Node]()
+      var edges = Seq[(Node, Seq[Node])]()
+
+      def get_node(id: Int): Node = {
+        nodes.find(_.id == id).getOrElse {
+          val node = Node(id)
+          nodes = nodes :+ node
+          node
+        }
+      }
+
+      var i = 0
+
+      def error() = Right(s"Error whole parsing at position $i")
+
+      def skip_whitespaces(): Unit = while (i < input.length && input(i).isWhitespace) i += 1;
+      def char(c: Char): Boolean = {
+        skip_whitespaces()
+        val same = input(i) == c
+        if (same) i += 1
+        return same
+      }
+      def string(s: String): Boolean = {
+        skip_whitespaces()
+        var j = 0
+        while (j < s.length && j + i < input.length) {
+          if (input(i + j) != s(j)) {
+            return false
+          }
+          j += 1
+        }
+        i += j
+        return true
+      }
+      def int(): Int = {
+        skip_whitespaces()
+        var digits = ""
+        while (i < input.length && input(i).isDigit) {
+          digits += input(i)
+          i += 1
+        }
+        return if (digits.isEmpty) -1 else Integer.parseInt(digits)
+      }
+
+      if (!string("graph")) return error()
+      if (!char('=')) return error()
+      while (i < input.length) {
+        val source_id = int()
+        if (source_id < 0) return error()
+        val source = get_node(source_id)
+        nodes = source +: nodes
+        var targets = Seq[Node]()
+
+        if (!char('(')) return error()
+        var target_id = int()
+        while (0 <= target_id) {
+          targets = targets :+ get_node(target_id)
+          char(',')
+          target_id = int()
+        }
+        if (!char(')')) return error()
+        if (!char(';')) return error()
+        skip_whitespaces()
+        edges = edges :+ (source, targets)
+      }
+
+      return Left(edges)
     }
 
     def graph_to_string(): String = {
       val builder = new StringBuilder()
       builder.append("graph=")
 
-      for ((source, targets) <- edges) {
+      for ((source, targets) <- current_state()) {
          builder.append(source.id)
          builder.append("(")
          for (target <- targets) {
@@ -168,30 +242,82 @@ object Main {
         case _: IOException => return false
       }
 
-      return true;
+      return true
+    }
+
+    def undo(): Unit = {
+      if (1 < history.length) {
+        val head = history.head
+        history = history.tail
+        future = head +: future
+      }
+    }
+
+    def redo(): Unit = {
+      if (0 < future.length) {
+        val head = future.head
+        future = future.tail
+        history = head +: history
+      }
+    }
+
+    def current_state(): Edges = {
+      return history.head
+    }
+
+    def push_state(state: Edges): Unit = {
+      history = state +: history
+      future = Seq[Seq[(Node, Seq[Node])]]()
     }
 
     def add_node(): Unit = {
-      val new_node = Node(id = nodes.length + 1)
-      nodes = nodes :+ new_node
-      edges = edges :+ (new_node, Seq[Node]())
+      val new_node = Node(id = current_state().length + 1)
+      push_state(current_state :+ (new_node, Seq[Node]()))
       reset()
     }
 
-    def add_edge(from: Node, to: Node): Unit = {
-      edges = edges.map {
-        case (`from`, targets) if !targets.contains(to) => (from, to +: targets)
-        case t => t
+    def delete_node(): Unit = {
+      val selected = root
+      if (null != selected) {
+        push_state(
+          current_state().filter {
+            case (`selected`, _) => false
+            case _               => true
+          }.map {
+            case (source, targets) => (source, targets.filter(_ != selected))
+          })
       }
+      set_root(null)
+    }
+
+    def add_edge(from: Node, to: Node): Unit = {
+      push_state(
+        current_state().map {
+          case (`from`, targets) if !targets.contains(to) => (from, to +: targets)
+          case t => t
+        })
+      set_root(null)
+    }
+
+    def delete_edge(from: Node, to: Node): Unit = {
+      push_state(
+        current_state().map {
+          case (`from`, targets) => (from, targets.filter(_ != to))
+          case t => t
+        })
+      set_root(null)
     }
 
     // Useful functions
     def reset(): Unit = {
-      if (null == root) root = nodes(0)
-      nodes_color = nodes.map(n => n -> Color.White).toMap
-      nodes_depth = nodes.map(n => n -> -1).toMap
-      nodes_depth += (root -> 0)
-      nodes_todo = Seq(root)
+      nodes_color = current_state().map { case (n, _) => n -> Color.White }.toMap
+      nodes_depth = current_state().map { case (n, _) => n -> -1 }.toMap
+      if (null != root) {
+        nodes_depth += (root -> 0)
+        nodes_todo = Seq(root)
+      } else {
+        nodes_todo = Seq()
+      }
       node_parents = Map[Node, Node]()
     }
 
@@ -202,8 +328,11 @@ object Main {
 
     // Layouting for the graph and tree
     def get_node_graph_pos(node: Node): Vec2 = {
-      val index = nodes.indexOf(node)
-      val angle = toRadians(360.0 / nodes.length * index)
+      val index = current_state().indexWhere {
+        case (`node`, _) => true
+        case _ => false
+      }
+      val angle = toRadians(360.0 / current_state().length * index)
       return Vec2(
         graph_x + (cos(angle) * nodes_layout_radius),
         graph_y + (sin(angle) * nodes_layout_radius))
@@ -211,7 +340,7 @@ object Main {
 
     def get_node_tree_pos(node: Node): Vec2 = {
       val depth    = nodes_depth(node)
-      val siblings = nodes.filter(nodes_depth(_) == depth).sortBy(_.id)
+      val siblings = current_state().map { case (n, _) => n }.filter(nodes_depth(_) == depth).sortBy(_.id)
       val index    = siblings.indexOf(node)
 
       return Vec2(
@@ -226,7 +355,10 @@ object Main {
     // Map of the displayed node colors, used for fading
     var displayed_nodes_color = Map[Node, Color]()
 
-    var edge_adding = false
+    val Tool_None        = 0
+    val Tool_Add_Edge    = 1
+    val Tool_Delete_Edge = 2
+    var active_tool = Tool_None
 
     val buttons = Array(
       Button(
@@ -244,8 +376,37 @@ object Main {
           x2 = (window.width  * 0.3),
           y2 = (window.height * 1.0)),
         text      = "Add Edge",
-        action    = { () => edge_adding = !edge_adding },
-        highlight = { () => edge_adding }),
+        action    = { () =>
+          if (active_tool != Tool_Add_Edge)
+            active_tool = Tool_Add_Edge
+          else
+            active_tool = Tool_None
+        },
+        highlight = { () => active_tool == Tool_Add_Edge }),
+
+      Button(
+        Rectangle(
+          x1 = (window.width  * 0.0),
+          y1 = (window.height * 0.9),
+          x2 = (window.width  * 0.15),
+          y2 = (window.height * 0.95)),
+        text    = "Delete Node",
+        action  = { () => delete_node() },
+        enabled = { () => null != root }),
+      Button(
+        Rectangle(
+          x1 = (window.width  * 0.15),
+          y1 = (window.height * 0.9),
+          x2 = (window.width  * 0.3),
+          y2 = (window.height * 0.95)),
+        text      = "Delete Edge",
+        action    = { () =>
+          if (active_tool != Tool_Delete_Edge)
+            active_tool = Tool_Delete_Edge
+          else
+            active_tool = Tool_None
+        },
+        highlight = { () => active_tool == Tool_Delete_Edge }),
 
       Button(
         Rectangle(
@@ -254,7 +415,15 @@ object Main {
           x2 = (window.width  * 0.5),
           y2 = (window.height * 1.0)),
         text   = "Load",
-        action = { () => load_graphs() }),
+        action = { () =>
+          load_graph() match {
+            case Left(loaded_edges) =>
+              push_state(loaded_edges)
+              reset()
+            case Right(error) =>
+              println(error)
+          }
+        }),
       Button(
         Rectangle(
           x1 = (window.width  * 0.5),
@@ -266,13 +435,33 @@ object Main {
 
       Button(
         Rectangle(
+          x1 = (window.width  * 0.35),
+          y1 = (window.height * 0.9),
+          x2 = (window.width  * 0.5),
+          y2 = (window.height * 0.95)),
+        text   = "Undo",
+        action = { () => undo() },
+        enabled = { () => 1 < history.length }),
+      Button(
+        Rectangle(
+          x1 = (window.width  * 0.5),
+          y1 = (window.height * 0.9),
+          x2 = (window.width  * 0.65),
+          y2 = (window.height * 0.95)),
+        text    = "Redo",
+        action  = { () => redo() },
+        enabled = { () => 0 < future.length }),
+
+
+      Button(
+        Rectangle(
           x1 = (window.width  * 0.7),
           y1 = (window.height * 0.95),
           x2 = (window.width  * 0.85),
           y2 = (window.height * 1.0)),
         text    = "Next step",
         action  = { () => step() },
-        enabled = { () => null != nodes_todo && nodes_todo.nonEmpty }),
+        enabled = { () => null != root && null != nodes_todo && nodes_todo.nonEmpty }),
       Button(
         Rectangle(
           x1 = (window.width  * 0.85),
@@ -296,9 +485,17 @@ object Main {
           case KeyEvent(KeyEvent.Key_Space, true) => step()
 
           case KeyEvent(KeyEvent.Mouse_1, true) =>
-            nodes
+            current_state()
+              .map     { case (node, _) => node }
               .filter  { node => Circle.contains_point(graph_node_circle(node), mouse_pos) }
-              .foreach { node => if (null != root && edge_adding) add_edge(root, node) else set_root(node) }
+              .foreach { node =>
+                if (null != root && active_tool == Tool_Add_Edge)
+                  add_edge(root, node)
+                else if (null != root && active_tool == Tool_Delete_Edge)
+                  delete_edge(root, node)
+                else
+                  set_root(node)
+              }
             buttons
               .filter  { button => button.enabled() && Rectangle.contains_point(button.bounds, mouse_pos) }
               .foreach { button => button.action() }
@@ -326,7 +523,7 @@ object Main {
         window.draw_line(p2.x.toInt, p2.y.toInt, p4.x.toInt, p4.y.toInt, line_width, color)
       }
 
-      def draw_graph_node(node: Node, border_color: Color, fill_color: Color): Unit = {
+      def draw_graph_node(node: Node, border_color: Color, fill_color: Color, text_color: Color): Unit = {
         val circle = graph_node_circle(node)
         val x = circle.center.x.toInt
         val y = circle.center.y.toInt
@@ -336,10 +533,10 @@ object Main {
         val (label_width, label_height) = font_renderer.calculate_bounds(text, font_size)
         val text_x = x - label_width / 2
         val text_y = y + 6
-        font_renderer.draw(window, text_x, text_y, text, font_size, 0.5f, border_color)
+        font_renderer.draw(window, text_x, text_y, text, font_size, 0.5f, text_color)
       }
 
-      def draw_tree_node(node: Node, border_color: Color, fill_color: Color): Unit = {
+      def draw_tree_node(node: Node, border_color: Color, fill_color: Color, text_color: Color): Unit = {
         val center = get_node_tree_pos(node)
         val x = center.x.toInt
         val y = center.y.toInt
@@ -349,7 +546,7 @@ object Main {
         val (label_width, label_height) = font_renderer.calculate_bounds(text, font_size)
         val text_x = x - label_width / 2
         val text_y = y + 6
-        font_renderer.draw(window, text_x, text_y, text, font_size, 0.5f, border_color)
+        font_renderer.draw(window, text_x, text_y, text, font_size, 0.5f, text_color)
       }
 
       def draw_button(button: Button): Unit = {
@@ -378,7 +575,7 @@ object Main {
         font_renderer.draw(window, text_x, text_y, button.text, font_size, 0.5f, border_color)
       }
 
-      for ((source, targets) <- edges; target <- targets) {
+      for ((source, targets) <- current_state(); target <- targets) {
         if (source == target) { // if the edge is a loop, we need a special case to draw it
           val p1 = graph_node_circle(source).center
           val n = (p1 - Vec2(graph_x, graph_y)) / nodes_layout_radius
@@ -406,12 +603,13 @@ object Main {
           Color.Red)
       }
 
-      for (node <- nodes) {
+      for ((node, _) <- current_state()) {
         val border_color = if (nodes_todo.contains(node)) Color.Red else Color.Black
         val old_color = displayed_nodes_color.getOrElse(node, Color.White)
         val fill_color = (old_color + nodes_color(node)) * 0.5f
         displayed_nodes_color += (node -> fill_color)
-        draw_graph_node(node, border_color, fill_color)
+        val text_color = if (fill_color.avg < 0.5) Color.White else Color.Black
+        draw_graph_node(node, border_color, fill_color, text_color)
       }
 
       for ((target, source) <- node_parents) {
@@ -420,9 +618,9 @@ object Main {
         draw_arrow(p1, p2, Color.Black)
       }
 
-      for (node <- nodes) {
+      for ((node, _) <- current_state()) {
         if (node == root || node_parents.contains(node)) {
-          draw_tree_node(node, Color.Black, Color.White)
+          draw_tree_node(node, Color.Black, Color.White, Color.Black)
         }
       }
 
