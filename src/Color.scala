@@ -3,6 +3,21 @@ package ui
 import java.util
 
 object Color {
+
+  val Black = Color(0, 0, 0)
+  val Red   = Color(1, 0, 0)
+  val Green = Color(0, 1, 0)
+  val Blue  = Color(0, 0, 1)
+  val White = Color(1, 1, 1)
+
+  val Yellow  = Red   + Green
+  val Cyan    = Green + Blue
+  val Magenta = Blue  + Red
+
+  val Dark_Gray  = White * 0.25f
+  val Gray       = White * 0.5f
+  val Light_Gray = White * 0.75f
+
   // LUT of gamma-correct float value for an srgb byte value
   val byte_to_float = new Array[Float](256)
   for (b <- 0 until 256) {
@@ -63,20 +78,6 @@ object Color {
       c1.r * (1 - f) + c2.r * f,
       c1.g * (1 - f) + c2.g * f,
       c1.b * (1 - f) + c2.b * f)
-
-  val Black = Color(0, 0, 0)
-  val Red   = Color(1, 0, 0)
-  val Green = Color(0, 1, 0)
-  val Blue  = Color(0, 0, 1)
-  val White = Color(1, 1, 1)
-
-  val Yellow  = Red   + Green
-  val Cyan    = Green + Blue
-  val Magenta = Blue  + Red
-
-  val Dark_Gray  = White * 0.25f
-  val Gray       = White * 0.5f
-  val Light_Gray = White * 0.75f
 }
 
 case class Color(r: Float, g: Float, b: Float) {

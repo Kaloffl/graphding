@@ -38,9 +38,7 @@ object Circle {
   }
 }
 
-case class Circle(center: Vec2, radius: Double) {
-
-}
+case class Circle(center: Vec2, radius: Double)
 
 
 object Rectangle {

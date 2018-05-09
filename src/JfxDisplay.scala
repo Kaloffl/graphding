@@ -51,10 +51,16 @@ class JfxDisplay(
   // |||   And I hope they'll eat the   |||
   // VVV   Java FX devs...              VVV
 
-
-  val events = new Iterator[InputEvent] {
+  object events extends Iterator[InputEvent] {
     override def hasNext: Boolean = !ActualDisplay.instance.events.isEmpty
     override def next: InputEvent = ActualDisplay.instance.events.poll
+    def await_event(): Unit = {
+      if (!hasNext) {
+        ActualDisplay.instance.events.synchronized {
+          ActualDisplay.instance.events.wait()
+        }
+      }
+    }
   }
 
   ActualDisplay.width = width
@@ -149,7 +155,12 @@ class ActualDisplay extends Application {
   val view = new ImageView(image)
   val events = new util.LinkedList[InputEvent]
   
- 
+  def add_input_event(event: InputEvent): Unit = {
+    events.add(event)
+    events.synchronized {
+      events.notifyAll()
+    }
+  }
 
   override def start(stage: Stage): Unit = {
     val content = new BorderPane
@@ -158,7 +169,7 @@ class ActualDisplay extends Application {
     scene.setOnKeyPressed((ev: javafx.scene.input.KeyEvent) => {
       val key = ActualDisplay.jfxKeyMap.get(ev.getCode)
       if (null != key) {
-        events.add(new KeyEvent(key, true))
+        add_input_event(new KeyEvent(key, true))
       }
       if (ev.isControlDown && ev.getCode == KeyCode.C) {
         val content = new ClipboardContent
@@ -169,7 +180,7 @@ class ActualDisplay extends Application {
     scene.setOnKeyReleased((ev: javafx.scene.input.KeyEvent) => {
       val key = ActualDisplay.jfxKeyMap.get(ev.getCode)
       if (null != key) {
-        events.add(new KeyEvent(key, false))
+        add_input_event(new KeyEvent(key, false))
       }
       if (ev.isControlDown && ev.getCode == KeyCode.C) {
         val content = new ClipboardContent
@@ -184,7 +195,7 @@ class ActualDisplay extends Application {
         case MouseButton.MIDDLE => KeyEvent.Mouse_3
         case _ => null
       }
-      events.add(new KeyEvent(key, true))
+      add_input_event(new KeyEvent(key, true))
     })
     scene.setOnMouseReleased((ev: javafx.scene.input.MouseEvent) => {
       val key = ev.getButton match {
@@ -193,19 +204,19 @@ class ActualDisplay extends Application {
         case MouseButton.MIDDLE => KeyEvent.Mouse_3
         case _ => null
       }
-      events.add(new KeyEvent(key, false))
+      add_input_event(new KeyEvent(key, false))
     })
     scene.setOnMouseMoved((ev: javafx.scene.input.MouseEvent) => {
-      events.add(MouseEvent(ev.getSceneX.toInt, ev.getSceneY.toInt, dragged = false))
+      add_input_event(MouseEvent(ev.getSceneX.toInt, ev.getSceneY.toInt, dragged = false))
     })
     scene.setOnMouseDragged((ev: javafx.scene.input.MouseEvent) => {
-      events.add(MouseEvent(ev.getSceneX.toInt, ev.getSceneY.toInt, dragged = true))
+      add_input_event(MouseEvent(ev.getSceneX.toInt, ev.getSceneY.toInt, dragged = true))
     })
     scene.setOnScroll((ev: javafx.scene.input.ScrollEvent) => {
-      events.add(ScrollEvent(ev.getDeltaX, ev.getDeltaY))
+      add_input_event(ScrollEvent(ev.getDeltaX, ev.getDeltaY))
     })
     scene.setOnZoom((ev: javafx.scene.input.ZoomEvent) => {
-      events.add(ZoomEvent(ev.getZoomFactor))
+      add_input_event(ZoomEvent(ev.getZoomFactor))
     })
     stage.setScene(scene)
     stage.setResizable(false)
