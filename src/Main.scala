@@ -280,13 +280,19 @@ object Main {
     // Function that turns Parent Map into a String for serialization
     def tree_to_string(): String = {
       val builder = new StringBuilder()
-      builder.append("tree=")
+      builder.append("graph=")
 
-      for ((child, parent) <- node_parents) {
+      // Turn the Map[C, P] into a Map[P, Set[C]]
+      val node_children = node_parents.groupBy {case (_, v) => v }.mapValues(_.keys)
+
+      for ((parent, children) <- node_children) {
         builder.append(parent.id)
-        builder.append("->")
-        builder.append(child.id)
-        builder.append(";")
+        builder.append("(")
+        for (child <- children) {
+          builder.append(child.id)
+          builder.append(",")
+        }
+        builder.append(");")
       }
       return builder.toString
     }
