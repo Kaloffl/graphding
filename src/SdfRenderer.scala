@@ -99,6 +99,55 @@ object SdfRenderer {
     }
   }
 
+  private val sqrt3 = 1.732050808
+
+  def bezier(
+    ax: Float, ay: Float,
+    bx: Float, by: Float,
+    cx: Float, cy: Float,
+    width: Float
+  ): Sdf = {
+    val bdx = (ax + cx) * 0.5f - bx
+    val bdy = (ay + cy) * 0.5f - by
+    val ilbd = 1.0f / sqrt(bdx * bdx + bdy * bdy).toFloat
+    val nx = bdx * ilbd
+    val ny = bdy * ilbd
+    val abx = bx - ax
+    val aby = by - ay
+    val cbx = bx - cx
+    val cby = by - cy
+    val slope_a = ((abx * nx + aby * ny) / (abx * ny - aby * nx)) * 0.5f
+    val slope_c = ((cbx * nx + cby * ny) / (cbx * ny - cby * nx)) * 0.5f
+    val scale = (slope_c - slope_a) / ((cx - ax) * ny - (cy - ay) * nx)
+    val origin_x = ax - ny * slope_a / scale - nx * slope_a * slope_a / scale
+    val origin_y = ay + nx * slope_a / scale - ny * slope_a * slope_a / scale
+    val min_x = min(slope_a, slope_c)
+    val max_x = max(slope_a, slope_c)
+    val half_width = width * 0.5f
+
+    (x, y) => {
+      val px = ((x - origin_x) * ny - (y - origin_y) * nx) * scale
+      val py = ((x - origin_x) * nx + (y - origin_y) * ny) * scale
+      val e = ((1.5 - py) * py - 0.75) * py + 0.125
+      val f = 0.0625 * px * px + e / 27.0
+      if (0.0 <= f) {
+        val g = sqrt(f)
+        val cx = max(min_x, min(max_x, cbrt(0.25 * px + g) + cbrt(0.25 * px - g)))
+        sqrt(pow(cx - px, 2.0) + pow(cx * cx - py, 2.0)).toFloat / scale - half_width
+      } else {
+        val v = acos(sqrt(27.0 / -e) * px * 0.25) / 3.0
+        val m = cos(v)
+        val n = sin(v) * sqrt3
+        val o = sqrt((py - 0.5) / 3.0)
+        val cx1 = max(min_x, min(max_x,  (m + m) * o))
+        val cx2 = max(min_x, min(max_x, -(n + m) * o))
+        val d1 = pow(cx1 - px, 2.0) + pow(cx1 * cx1 - py, 2.0)
+        val d2 = pow(cx2 - px, 2.0) + pow(cx2 * cx2 - py, 2.0)
+        sqrt(min(d1, d2)).toFloat / scale - half_width
+      }
+    }
+  }
+
   //
   // SHAPE MANIPULATION
   //
@@ -117,7 +166,7 @@ object SdfRenderer {
       // TODO test direction
       val x2 = x - pivot_x
       val y2 = y - pivot_y
-      sdf(x2 * c - y2 * s + pivot_x, x2 * s + y2 * c + pivot_y)
+      sdf(x2 * c + y2 * s + pivot_x, y2 * c - x2 * s + pivot_y)
     }
   }
 

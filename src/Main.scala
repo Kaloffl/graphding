@@ -18,7 +18,7 @@ object Main {
   val nodes_border_width     =   2
   val node_font_size         =  22
   val selection_border_width =   3
-  val line_width             =   1
+  val line_width             =   2
   val arrow_tip_length       =  10
   val nodes_layout_radius    = 150
   val graph_x                = 250
@@ -637,27 +637,16 @@ object Main {
         window.fill(Color.White)
 
         // Function that draws an arrow between the two given points
-        def draw_arrow(from: Vec2, to: Vec2, color: Color): Unit = {
-          val diff = to - from
-          val normal = Vec2.normalize(diff)
-          val p1 = from
-          val p2 = to - normal * (nodes_size / 2)
-          val p3 = p2 - normal * (arrow_tip_length / 2)
-
-          val p4 = p2 - normal * arrow_tip_length - Vec2.turn_cw (normal) * arrow_tip_length / 2
-          val p5 = p2 - normal * arrow_tip_length - Vec2.turn_ccw(normal) * arrow_tip_length / 2
-
+        def draw_arrow(position: Vec2, direction: Vec2, color: Color): Unit = {
+          val p1 = position
+          val p2 = p1 - direction * arrow_tip_length - Vec2.turn_cw (direction) * arrow_tip_length / 2
+          val p3 = p1 - direction * arrow_tip_length - Vec2.turn_ccw(direction) * arrow_tip_length / 2
           SdfRenderer.render(
             window,
-            SdfRenderer.unite(
-              SdfRenderer.line(
-                p1.x.toFloat, p1.y.toFloat,
-                p3.x.toFloat, p3.y.toFloat,
-                line_width),
-              SdfRenderer.triangle(
-                p2.x.toFloat, p2.y.toFloat,
-                p4.x.toFloat, p4.y.toFloat,
-                p5.x.toFloat, p5.y.toFloat)),
+            SdfRenderer.triangle(
+              p1.x.toFloat, p1.y.toFloat,
+              p2.x.toFloat, p2.y.toFloat,
+              p3.x.toFloat, p3.y.toFloat),
             color)
         }
 
@@ -674,26 +663,33 @@ object Main {
           font_renderer.draw(window, text_x, text_y, text, node_font_size, 0.5f, text_color)
         }
 
+        val arrow_point_offset = sin(PI / 4.0) * nodes_size * 0.5
 
         // Iterate over all edges and draw arrows between the nodes
         for ((source, targets) <- current_state(); target <- targets) {
-          if (source == target) { // if the edge is a loop, we need a special case to draw it
-            val p1 = graph_circles(source).center - offset
-            val (graph_pos, radius) = get_graph_pos()
-            val n = (p1 - graph_pos + offset) / radius
+          val (graph_pos, radius) = get_graph_pos()
+          val source_pos = graph_circles(source).center
+          val source_normal = (source_pos - graph_pos) / radius
+          val source_right = Vec2.turn_cw(source_normal)
+          val p1 = source_pos - source_normal * arrow_point_offset + source_right * arrow_point_offset - offset
 
-            val p2 = p1 + n * (nodes_size / 2 + nodes_margin * 0.75) + Vec2.turn_cw(n)  * (nodes_margin * 0.25)
-            val p3 = p1 + n * (nodes_size / 2 + nodes_margin * 0.75) + Vec2.turn_ccw(n) * (nodes_margin * 0.25)
+          val target_pos = graph_circles(target).center
+          val target_normal = (target_pos - graph_pos) / radius
+          val target_left = Vec2.turn_ccw(target_normal)
+          val p2 = target_pos - target_normal * arrow_point_offset + target_left * arrow_point_offset - offset
 
-            SdfRenderer.render(window, SdfRenderer.line(p1.x.toFloat, p1.y.toFloat, p2.x.toFloat, p2.y.toFloat, line_width), Color.Black)
-            SdfRenderer.render(window, SdfRenderer.line(p2.x.toFloat, p2.y.toFloat, p3.x.toFloat, p3.y.toFloat, line_width), Color.Black)
-            draw_arrow(p3, p1, Color.Black)
-          } else {
-            val p1 = graph_circles(source).center - offset
-            val p2 = graph_circles(target).center - offset
-            val color = if (nodes_todo.contains(target) && node_parents.get(target).contains(source)) Color.Red else Color.Black
-            draw_arrow(p1, p2, color)
-          }
+          val p3 = graph_pos - offset
+
+          val color = if (nodes_todo.contains(target) && node_parents.get(target).contains(source)) Color.Red else Color.Black
+          SdfRenderer.render(
+            window,
+            SdfRenderer.bezier(
+              p1.x.toFloat, p1.y.toFloat,
+              p3.x.toFloat, p3.y.toFloat,
+              p2.x.toFloat, p2.y.toFloat,
+              line_width),
+            color)
+          draw_arrow(p2, Vec2.normalize(p2 - p3), color)
         }
 
         // Highlight the current root Node
@@ -720,7 +716,15 @@ object Main {
         for ((target, source) <- node_parents) {
           val p1 = tree_circles(source).center - offset
           val p2 = tree_circles(target).center - offset
-          draw_arrow(p1, p2, Color.Black)
+          SdfRenderer.render(
+            window,
+            SdfRenderer.line(
+              p1.x.toFloat, p1.y.toFloat,
+              p2.x.toFloat, p2.y.toFloat,
+              line_width),
+            Color.Black)
+          val direction = Vec2.normalize(p2 - p1)
+          draw_arrow(p2 - direction * nodes_size * 0.5, direction, Color.Black)
         }
 
         // Iterate over all Circles in the Tree and draw them

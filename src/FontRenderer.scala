@@ -87,7 +87,7 @@ object FontRenderer {
     }
     scanner.close()
 
-    val pages_loaded = pages.map{fn => 
+    val pages_loaded = pages.map { fn =>
       val image = ImageIO.read(new File(fn))
       val width = image.getWidth
       val height = image.getHeight
